@@ -1,0 +1,875 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>色を音に</title>
+<style>
+  :root {
+    --bg: #f6f5f2; --fg: #1d1d1f; --muted: #6b6b70; --card: #ffffff; --line: #e2e0db; --accent: #3b5bdb;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #141416; --fg: #ececee; --muted: #9a9aa2; --card: #1e1e22; --line: #2e2e34; --accent: #8fa6ff; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font-family: system-ui, -apple-system, "Hiragino Sans", "Yu Gothic UI", sans-serif; line-height: 1.6; }
+  main { max-width: 820px; margin: 0 auto; padding: 24px 16px 64px; }
+  h1 { font-size: 1.5rem; margin: 0 0 4px; }
+  .sub { color: var(--muted); margin: 0 0 20px; font-size: .9rem; }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  button, label.btn {
+    font: inherit; font-size: .95rem; padding: 10px 16px; border-radius: 10px; border: 1px solid var(--line);
+    background: var(--card); color: var(--fg); cursor: pointer;
+  }
+  button.primary { background: var(--accent); color: #fff; border-color: transparent; }
+  button.on { outline: 3px solid var(--accent); outline-offset: 2px; }
+  input[type=file] { display: none; }
+  #camera { display: none; margin-top: 12px; }
+  #camera video { width: 100%; max-height: 60vh; border-radius: 12px; background: #000; }
+  #stage { display: none; position: relative; margin-top: 16px; max-width: 100%; vertical-align: top; overflow: hidden; border-radius: 12px; }
+  #preview { display: block; max-width: 100%; max-height: 360px; border-radius: 12px; }
+  #scanLine {
+    display: none; position: absolute; top: 0; bottom: 0; width: 12%; transform: translateX(-50%);
+    background: rgba(255,255,255,.22); border-left: 2px solid #fff; border-right: 2px solid #fff;
+    box-shadow: 0 0 14px rgba(0,0,0,.35); pointer-events: none;
+  }
+  #scanLine.vertical {
+    top: auto; bottom: auto; left: 0; right: 0; width: auto; height: 12%; transform: translateY(-50%);
+    border: 0; border-top: 2px solid #fff; border-bottom: 2px solid #fff;
+  }
+  #result { display: none; }
+  .key { margin-top: 16px; padding: 14px 16px; background: var(--card); border: 1px solid var(--line); border-radius: 12px; display: flex; gap: 14px; align-items: center; }
+  .key .dot { width: 44px; height: 44px; border-radius: 50%; flex: none; border: 1px solid var(--line); }
+  .key .big { font-size: 1.15rem; font-weight: 600; }
+  .panel { margin-top: 12px; display: flex; flex-wrap: wrap; gap: 8px 20px; align-items: center; font-size: .85rem; color: var(--muted); }
+  .panel label { display: flex; align-items: center; gap: 6px; }
+  .panel input[type=range] { width: 110px; }
+  #colors { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; margin-top: 16px; }
+  .chip { background: var(--card); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; cursor: pointer; transition: transform .12s; }
+  .chip:hover { transform: translateY(-2px); }
+  .chip.playing { outline: 3px solid var(--accent); outline-offset: 2px; }
+  .swatch { height: 64px; position: relative; }
+  .badge { position: absolute; top: 6px; left: 6px; font-size: .7rem; background: rgba(0,0,0,.6); color: #fff; padding: 1px 7px; border-radius: 8px; }
+  .info { padding: 8px 10px; font-size: .8rem; }
+  .emo { font-weight: 600; }
+  .note { font-size: 1.1rem; font-weight: 600; }
+  .meta { color: var(--muted); }
+  .bar { height: 4px; background: var(--line); border-radius: 2px; margin: 3px 0 6px; }
+  .bar > i { display: block; height: 100%; background: var(--accent); border-radius: 2px; }
+  .legend { margin-top: 24px; font-size: .85rem; color: var(--muted); }
+  .legend li { margin: 2px 0; }
+  .msg { color: var(--muted); font-size: .85rem; margin-top: 8px; }
+  #lab { margin-top: 32px; padding-top: 20px; border-top: 1px solid var(--line); }
+  #lab h2 { font-size: 1.1rem; margin: 0 0 4px; }
+  #labGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 8px; margin-top: 12px; }
+  .labBtn { display: flex; gap: 10px; align-items: center; text-align: left; padding: 10px 12px; }
+  .labBtn .dot { width: 22px; height: 22px; border-radius: 50%; flex: none; border: 1px solid var(--line); }
+  .labBtn b { display: block; font-size: .9rem; }
+  .labBtn small { color: var(--muted); font-size: .72rem; line-height: 1.3; display: block; }
+  .labBtn.playing { outline: 3px solid var(--accent); outline-offset: 2px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>色を音に</h1>
+  <p class="sub">写真の色から「調」を決め、取り出した色をそれぞれ1つの音として鳴らします。</p>
+
+  <div class="row">
+    <label class="btn" for="file">写真を選ぶ</label>
+    <input id="file" type="file" accept="image/*">
+    <label class="btn" for="snap">スマホで撮影</label>
+    <input id="snap" type="file" accept="image/*" capture="environment">
+    <button id="camBtn">カメラを起動</button>
+  </div>
+  <div class="msg" id="msg"></div>
+
+  <div id="camera">
+    <video id="video" autoplay playsinline muted></video>
+    <div class="row" style="margin-top:8px">
+      <button id="shoot" class="primary">撮影する</button>
+      <button id="camClose">閉じる</button>
+    </div>
+  </div>
+
+  <div id="stage">
+    <img id="preview" alt="選んだ写真">
+    <div id="scanLine"></div>
+  </div>
+
+  <div id="result">
+    <div class="key">
+      <div class="dot" id="keyDot"></div>
+      <div>
+        <div class="big" id="keyTitle"></div>
+        <div class="meta" id="keySub"></div>
+      </div>
+    </div>
+
+    <div class="row" style="margin-top:12px">
+      <button id="harmony" class="primary">Harmony（和音）</button>
+      <button id="scan">Scan（写真を読む）</button>
+      <button id="random">Random（自動演奏）</button>
+      <span class="meta">色をタップすると1音ずつ鳴ります</span>
+    </div>
+
+    <div class="panel">
+      <label>音量 <input id="vol" type="range" min="0" max="1" step="0.01" value="0.7"></label>
+      <label>Harmonyの長さ <input id="hlen" type="range" min="2" max="20" step="1" value="8"> <span id="hlenVal">8</span>秒</label>
+      <label>Scanの向き
+        <select id="scanDir">
+          <option value="x">横スキャン（左右に動く）</option>
+          <option value="y">縦スキャン（上下に動く）</option>
+        </select>
+      </label>
+      <label>Scanの速さ（端から端まで） <input id="sweep" type="range" min="6" max="60" step="1" value="20"> <span id="sweepVal">20</span>秒</label>
+      <label><input id="crush" type="checkbox"> ビットクラッシュ<span id="crushKind"></span></label>
+      <label>ビット数 <input id="bits" type="range" min="1" max="8" step="1" value="4"> <span id="bitsVal">4</span></label>
+      <label>サンプルレート <input id="rate" type="range" min="1000" max="44100" step="100" value="8000"> <span id="rateVal">8000</span>Hz</label>
+    </div>
+
+    <div id="colors"></div>
+  </div>
+
+  <ul class="legend">
+    <li>いちばん強い色（面積 × 彩度）の感情で、写真全体のスケールと主音が決まります</li>
+    <li>色相 → そのスケールの中での音の位置（2オクターブ）。無彩色は明るさで位置を決めます</li>
+    <li>明るさ → 音量（とても暗い色は1オクターブ下）／ 彩度 → 音色（やわらかい ↔ 鋭い）</li>
+    <li>面積 → 和音での存在感と、自動演奏での出やすさ ／ 感情 → 音のくせ</li>
+    <li>Scan：全部の色を鳴らし続け、写真の上を動く帯の中にある色ほど大きく聞こえます</li>
+  </ul>
+
+  <section id="lab">
+    <h2>音色の試聴</h2>
+    <p class="meta">12種類の感情の音色を、同じ高さ・同じ条件で聞き比べます（写真がなくても使えます）。
+      実際の写真では、白・黒・グレー（Clarity / Depth / Neutral）は彩度0〜20%で鳴ります。</p>
+    <div class="panel">
+      <label>高さ <input id="labPitch" type="range" min="40" max="84" step="1" value="57"> <span id="labPitchVal"></span></label>
+      <label>彩度 <input id="labSat" type="range" min="0" max="100" step="1" value="60"> <span id="labSatVal">60</span>%</label>
+      <label>明るさ <input id="labVal" type="range" min="0" max="100" step="1" value="80"> <span id="labValVal">80</span>%</label>
+      <label>長さ <input id="labLen" type="range" min="0.5" max="8" step="0.5" value="2"> <span id="labLenVal">2</span>秒</label>
+    </div>
+    <div class="row" style="margin-top:10px">
+      <button id="labAll">12種類を順番に鳴らす</button>
+    </div>
+    <div id="labGrid"></div>
+  </section>
+</main>
+
+<script>
+const NUM_COLORS = 8;
+const NOTE_NAMES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+const SCALES = {
+  major:            { steps: [0, 2, 4, 5, 7, 9, 11], ja: 'メジャー' },
+  minor:            { steps: [0, 2, 3, 5, 7, 8, 10], ja: 'マイナー' },
+  pentatonic_major: { steps: [0, 2, 4, 7, 9],        ja: 'メジャー・ペンタトニック' },
+  pentatonic_minor: { steps: [0, 3, 5, 7, 10],       ja: 'マイナー・ペンタトニック' },
+  blues:            { steps: [0, 3, 5, 6, 7, 10],    ja: 'ブルース' }
+};
+const QUIRKS = {
+  Clarity:    'きらめく倍音',
+  Depth:      '低いノイズの響き',
+  Neutral:    'くせなし',
+  Passion:    '熱い歪み',
+  Warmth:     '厚みのあるコーラス',
+  Joy:        '明るく速い揺らぎ',
+  Freshness:  'はじけるアタック',
+  Peace:      'おだやかな音量の揺れ',
+  Calm:       'ゆったりした立ち上がりと揺れ',
+  Melancholy: '憂いのあるビブラート',
+  Mystery:    '深くゆっくりうねる',
+  Creativity: '金属的なFMの響き'
+};
+
+const $ = id => document.getElementById(id);
+let colors = [];
+let keyInfo = null;
+let scanGrid = null;
+
+/* ---------- 画像の読み込み ---------- */
+function loadFile(file) {
+  if (!file) return;
+  const url = URL.createObjectURL(file);
+  const img = new Image();
+  img.onload = () => showImage(img, url);
+  img.src = url;
+}
+$('file').onchange = e => loadFile(e.target.files[0]);
+$('snap').onchange = e => loadFile(e.target.files[0]);
+
+function showImage(source, url) {
+  stopRandom();
+  stopHarmony();
+  stopScan();
+  $('preview').src = url;
+  $('stage').style.display = 'inline-block';
+  analyze(source);
+  render();
+  $('result').style.display = 'block';
+}
+
+/* ---------- カメラ ---------- */
+let stream = null;
+$('camBtn').onclick = async () => {
+  $('msg').textContent = '';
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false });
+    $('video').srcObject = stream;
+    $('camera').style.display = 'block';
+  } catch (err) {
+    $('msg').textContent = 'カメラを起動できませんでした（' + err.name + '）。「写真を選ぶ」か「スマホで撮影」を使ってください。';
+  }
+};
+function stopCamera() {
+  if (stream) stream.getTracks().forEach(t => t.stop());
+  stream = null;
+  $('camera').style.display = 'none';
+}
+$('camClose').onclick = stopCamera;
+$('shoot').onclick = () => {
+  const v = $('video');
+  const c = document.createElement('canvas');
+  c.width = v.videoWidth; c.height = v.videoHeight;
+  c.getContext('2d').drawImage(v, 0, 0);
+  stopCamera();
+  showImage(c, c.toDataURL('image/jpeg', 0.9));
+};
+
+/* ---------- 色の抽出（k-means） ---------- */
+function extractColors(source, k) {
+  const W = 120;
+  const sw = source.naturalWidth || source.width, sh = source.naturalHeight || source.height;
+  const h = Math.max(1, Math.round(W * sh / sw));
+  const c = document.createElement('canvas');
+  c.width = W; c.height = h;
+  const g = c.getContext('2d', { willReadFrequently: true });
+  g.drawImage(source, 0, 0, W, h);
+  const data = g.getImageData(0, 0, W, h).data;
+
+  const px = [], pos = [];
+  for (let i = 0; i < data.length; i += 4) {
+    if (data[i + 3] < 128) continue;
+    px.push([data[i], data[i + 1], data[i + 2]]);
+    pos.push(i / 4);
+  }
+  // 初期値: k-means++（固定シードなので同じ写真なら毎回同じ結果）
+  let seed = 42;
+  const rand = () => (seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296;
+  const dist = (p, q) => (p[0] - q[0]) ** 2 + (p[1] - q[1]) ** 2 + (p[2] - q[2]) ** 2;
+  let centers = [px[Math.floor(rand() * px.length)].slice(0, 3)];
+  const dmin = px.map(p => dist(p, centers[0]));
+  while (centers.length < k) {
+    const total = dmin.reduce((a, b) => a + b, 0);
+    if (total === 0) break;                      // 色数が k より少ない
+    let r = rand() * total, idx = 0;
+    while ((r -= dmin[idx]) > 0 && idx < px.length - 1) idx++;
+    const nc = px[idx].slice(0, 3);
+    centers.push(nc);
+    px.forEach((p, i) => { dmin[i] = Math.min(dmin[i], dist(p, nc)); });
+  }
+
+  for (let iter = 0; iter < 12; iter++) {
+    const sums = centers.map(() => [0, 0, 0, 0]);
+    for (const p of px) {
+      let best = 0, bestD = Infinity;
+      for (let j = 0; j < centers.length; j++) {
+        const cc = centers[j];
+        const d = (p[0] - cc[0]) ** 2 + (p[1] - cc[1]) ** 2 + (p[2] - cc[2]) ** 2;
+        if (d < bestD) { bestD = d; best = j; }
+      }
+      const s = sums[best];
+      s[0] += p[0]; s[1] += p[1]; s[2] += p[2]; s[3]++;
+    }
+    centers = sums.map((s, j) => s[3] ? [s[0] / s[3], s[1] / s[3], s[2] / s[3], s[3]] : [centers[j][0], centers[j][1], centers[j][2], 0]);
+  }
+  // 面積の大きい順に並べ、各ピクセルがどの色に属するかの地図も作る（Scan 用）
+  const order = centers.map((_, j) => j).filter(j => centers[j][3] > 0).sort((a, b) => centers[b][3] - centers[a][3]);
+  const grid = new Int16Array(W * h).fill(-1);
+  px.forEach((p, i) => {
+    let best = 0, bestD = Infinity;
+    order.forEach((j, r) => { const d = dist(p, centers[j]); if (d < bestD) { bestD = d; best = r; } });
+    grid[pos[i]] = best;
+  });
+  return {
+    list: order.map(j => ({ rgb: centers[j].slice(0, 3).map(Math.round), share: centers[j][3] / px.length })),
+    grid, W, h
+  };
+}
+
+function rgbToHsv(r, g, b) {
+  r /= 255; g /= 255; b /= 255;
+  const max = Math.max(r, g, b), min = Math.min(r, g, b), d = max - min;
+  let h = 0;
+  if (d) {
+    if (max === r) h = ((g - b) / d) % 6;
+    else if (max === g) h = (b - r) / d + 2;
+    else h = (r - g) / d + 4;
+    h /= 6; if (h < 0) h += 1;
+  }
+  return { h, s: max ? d / max : 0, v: max };   // h は 0〜1
+}
+
+/* ---------- 色 → 感情（Streamlit版のルールを踏襲） ---------- */
+function classify(h, s, v) {
+  if (s < 0.2) {
+    if (v > 0.8) return { emotion: 'Clarity', baseFreq: 650, scale: 'major' };
+    if (v < 0.2) return { emotion: 'Depth', baseFreq: 120, scale: 'minor' };
+    return { emotion: 'Neutral', baseFreq: 200 + v * 250, scale: v > 0.6 ? 'pentatonic_major' : 'pentatonic_minor' };
+  }
+  if (h < 0.05 || h >= 0.95) return { emotion: 'Passion', baseFreq: 550 + v * 100, scale: v > 0.5 ? 'major' : 'blues' };
+  if (h < 0.15) return { emotion: 'Warmth', baseFreq: 500 + v * 100, scale: 'major' };
+  if (h < 0.25) return { emotion: 'Joy', baseFreq: 480 + v * 120, scale: 'pentatonic_major' };
+  if (h < 0.35) return { emotion: 'Freshness', baseFreq: 450 + v * 100, scale: 'major' };
+  if (h < 0.45) return { emotion: 'Peace', baseFreq: 400 + v * 100, scale: v > 0.5 ? 'pentatonic_major' : 'pentatonic_minor' };
+  if (h < 0.55) return { emotion: 'Calm', baseFreq: 350 + v * 100, scale: v > 0.6 ? 'major' : 'minor' };
+  if (h < 0.70) return { emotion: 'Melancholy', baseFreq: 300 + v * 100, scale: 'minor' };
+  if (h < 0.85) return { emotion: 'Mystery', baseFreq: 280 + v * 120, scale: 'blues' };
+  return { emotion: 'Creativity', baseFreq: 600 + v * 150, scale: v > 0.5 ? 'major' : 'minor' };
+}
+
+const freqToMidi = f => Math.round(69 + 12 * Math.log2(f / 440));
+const midiToFreq = m => 440 * Math.pow(2, (m - 69) / 12);
+const midiName = m => NOTE_NAMES[((m % 12) + 12) % 12] + (Math.floor(m / 12) - 1);
+
+/* ---------- 解析：層1（調）と層2（色ごとの音） ---------- */
+function analyze(source) {
+  scanGrid = extractColors(source, NUM_COLORS);
+  colors = scanGrid.list.map(c => {
+    const hsv = rgbToHsv(...c.rgb);
+    return { ...c, ...hsv, ...classify(hsv.h, hsv.s, hsv.v), strength: c.share * (hsv.s + 0.3) };
+  });
+
+  // 層1：いちばん強い色で調を決める（主音は C3〜B3 に収める）
+  const dom = colors.reduce((a, b) => (b.strength > a.strength ? b : a));
+  const rootMidi = 48 + (((freqToMidi(dom.baseFreq) - 48) % 12) + 12) % 12;
+  keyInfo = { dom, rootMidi, scale: dom.scale };
+  const steps = SCALES[dom.scale].steps;
+  const range = steps.length * 2;
+
+  // 層2：色ごとに音を決める
+  colors.forEach(c => {
+    c.isDominant = c === dom;
+    const pos = c.s < 0.2 ? c.v : c.h;                 // 無彩色は明るさで位置を決める
+    const idx = Math.min(range - 1, Math.floor(pos * range));
+    let midi = rootMidi + 12 * Math.floor(idx / steps.length) + steps[idx % steps.length];
+    if (c.v < 0.25) midi -= 12;                          // とても暗い色は1オクターブ下
+    c.midi = midi;
+    c.freq = midiToFreq(midi);
+    c.note = midiName(midi);
+    c.volume = 0.15 + 0.85 * c.v;                        // 明るさ → 音量
+    c.presence = 0.5 + 0.5 * Math.sqrt(c.share / colors[0].share); // 面積 → 和音での存在感
+  });
+}
+
+/* ---------- 表示 ---------- */
+const hexOf = rgb => '#' + rgb.map(x => x.toString(16).padStart(2, '0')).join('');
+
+function render() {
+  const { dom, rootMidi, scale } = keyInfo;
+  $('keyDot').style.background = hexOf(dom.rgb);
+  $('keyTitle').textContent = `この写真は ${dom.emotion}（${NOTE_NAMES[rootMidi % 12]} ${SCALES[scale].ja}）`;
+  $('keySub').textContent = `基準の色 ${hexOf(dom.rgb)} ・ 面積 ${Math.round(dom.share * 100)}% ・ 彩度 ${Math.round(dom.s * 100)}%`;
+
+  const box = $('colors');
+  box.innerHTML = '';
+  colors.forEach((c, i) => {
+    const el = document.createElement('div');
+    el.className = 'chip';
+    el.innerHTML = `
+      <div class="swatch" style="background:${hexOf(c.rgb)}">${c.isDominant ? '<span class="badge">基準</span>' : ''}</div>
+      <div class="info">
+        <div class="emo">${c.emotion}</div>
+        <div class="note">${c.note} <span class="meta">${Math.round(c.freq)} Hz</span></div>
+        <div class="meta">${hexOf(c.rgb)} ・ 面積 ${Math.round(c.share * 100)}%</div>
+        <div class="meta">音量（明るさ ${Math.round(c.v * 100)}%）</div>
+        <div class="bar"><i style="width:${c.volume * 100}%"></i></div>
+        <div class="meta">鋭さ（彩度 ${Math.round(c.s * 100)}%）</div>
+        <div class="bar"><i style="width:${c.s * 100}%"></i></div>
+        <div class="meta">くせ：${QUIRKS[c.emotion]}</div>
+      </div>`;
+    el.onclick = () => play(i, 0, 1.6);
+    box.appendChild(el);
+  });
+}
+
+/* ---------- 音の出口（音量 → ビットクラッシュ → コンプレッサー） ---------- */
+let ctx = null, master = null, noiseBuf = null;
+const crush = { on: false, bits: 4, rate: 8000, hold: 0, count: 0 };
+
+function audio() {
+  if (!ctx) {
+    ctx = new (window.AudioContext || window.webkitAudioContext)();
+    master = ctx.createGain();
+    master.gain.value = +$('vol').value;
+    comp = ctx.createDynamicsCompressor();
+    comp.connect(ctx.destination);
+    route();
+    loadCrusher();
+
+    noiseBuf = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate);
+    const nd = noiseBuf.getChannelData(0);
+    for (let i = 0; i < nd.length; i++) nd[i] = Math.random() * 2 - 1;
+  }
+  if (ctx.state === 'suspended') ctx.resume();
+  return ctx;
+}
+
+/* ---------- ビットクラッシュ ----------
+   オフの時は通さない（音の経路は master → comp だけ）。
+   オンの時は音専用のスレッドで動く AudioWorklet を使い、使えないブラウザでは ScriptProcessor に切り替える */
+let comp = null, crusherNode = null, crusherKind = null;
+
+// このアプリの音の大きさはおよそ ±0.25 なので、そこを「満タン」として段数を割り振る
+// （±1 基準だと、低いビット数で小さな音がすべて 0 に丸められて無音になる）
+// 段の中央に寄せる量子化なので 1ビットでも ± の矩形になり、無音には丸められない
+const CRUSH_FULL = 0.25;
+const CRUSHER_SRC = `
+const FULL = ${CRUSH_FULL};
+class Crusher extends AudioWorkletProcessor {
+  constructor() {
+    super();
+    this.bits = 4; this.rate = 8000; this.hold = []; this.count = 0;
+    this.port.onmessage = e => Object.assign(this, e.data);
+  }
+  process(inputs, outputs) {
+    const inp = inputs[0], out = outputs[0];
+    const step = 2 * FULL / Math.pow(2, this.bits);
+    const factor = Math.max(1, Math.round(sampleRate / this.rate));
+    let count = this.count;
+    for (let ch = 0; ch < out.length; ch++) {
+      const src = inp[ch] || inp[0], dst = out[ch];
+      if (!src) { dst.fill(0); continue; }
+      count = this.count;
+      for (let i = 0; i < dst.length; i++) {
+        if (count++ % factor === 0) { const x = src[i]; this.hold[ch] = x === 0 ? 0 : (Math.floor(x / step) + 0.5) * step; }
+        dst[i] = this.hold[ch] || 0;
+      }
+    }
+    this.count = count;
+    return true;
+  }
+}
+registerProcessor('crusher', Crusher);
+`;
+
+async function loadCrusher() {
+  if (!ctx.audioWorklet || typeof AudioWorkletNode === 'undefined') { showCrusherKind(); return; }
+  try {
+    const url = URL.createObjectURL(new Blob([CRUSHER_SRC], { type: 'application/javascript' }));
+    await ctx.audioWorklet.addModule(url);
+    if (crusherNode) crusherNode.disconnect();     // 読み込み中に互換モードを使っていたら置き換える
+    crusherNode = new AudioWorkletNode(ctx, 'crusher', { outputChannelCount: [2] });
+    crusherKind = 'worklet';
+    sendCrush();
+    route();
+  } catch (err) {
+    console.warn('AudioWorklet を使えないので互換モードにします', err);
+  }
+  showCrusherKind();
+}
+
+function scriptCrusher() {
+  const node = ctx.createScriptProcessor(1024, 1, 1);
+  node.onaudioprocess = e => {
+    const inp = e.inputBuffer.getChannelData(0), out = e.outputBuffer.getChannelData(0);
+    const step = 2 * CRUSH_FULL / Math.pow(2, crush.bits);
+    const factor = Math.max(1, Math.round(ctx.sampleRate / crush.rate));
+    for (let i = 0; i < inp.length; i++) {
+      if (crush.count++ % factor === 0) { const x = inp[i]; crush.hold = x === 0 ? 0 : (Math.floor(x / step) + 0.5) * step; }
+      out[i] = crush.hold;
+    }
+  };
+  crusherNode = node;
+  crusherKind = 'script';
+  showCrusherKind();
+}
+
+function sendCrush() {
+  if (crusherKind === 'worklet') crusherNode.port.postMessage({ bits: crush.bits, rate: crush.rate });
+}
+
+function route() {
+  if (!ctx) return;
+  master.disconnect();
+  if (crusherNode) crusherNode.disconnect();
+  if (crush.on) {
+    if (!crusherNode) scriptCrusher();
+    master.connect(crusherNode).connect(comp);
+  } else {
+    master.connect(comp);
+  }
+}
+
+function showCrusherKind() {
+  $('crushKind').textContent = crusherKind === 'worklet' ? '' : crusherKind === 'script' ? '（互換モード）' : '';
+}
+
+$('vol').oninput = e => { if (master) master.gain.value = +e.target.value; };
+$('crush').onchange = e => { crush.on = e.target.checked; audio(); route(); };
+$('bits').oninput = e => { crush.bits = +e.target.value; $('bitsVal').textContent = e.target.value; sendCrush(); };
+$('rate').oninput = e => { crush.rate = +e.target.value; $('rateVal').textContent = e.target.value; sendCrush(); };
+
+/* ---------- 1色ぶんの音 ---------- */
+// 彩度 0→1 で サイン → 三角 → ノコギリ → 矩形 をなめらかに切り替える
+const WAVES = [['sine', 1], ['triangle', 0.9], ['sawtooth', 0.45], ['square', 0.35]];
+function waveMix(s) {
+  return WAVES.map((w, i) => Math.max(0, 1 - Math.abs(s - i / 3) * 3) * w[1]);
+}
+
+// 1色ぶんの音の部品（波形・フィルター・感情のくせ）を組み立てる。音量の形は呼び出し側で付ける
+function buildVoice(c, t0) {
+  const a = ctx;
+  const sources = [];
+  const osc = (type, freq, detune = 0) => {
+    const o = a.createOscillator();
+    o.type = type; o.frequency.value = freq; o.detune.value = detune;
+    sources.push(o);
+    return o;
+  };
+
+  const sum = a.createGain();
+  const oscs = [];
+  waveMix(c.s).forEach((g, k) => {
+    if (g <= 0) return;
+    const o = osc(WAVES[k][0], c.freq);
+    const og = a.createGain(); og.gain.value = g;
+    o.connect(og).connect(sum);
+    oscs.push(o);
+  });
+
+  const filter = a.createBiquadFilter();
+  filter.type = 'lowpass';
+  filter.frequency.value = 500 + c.s * 6500;
+  filter.Q.value = 0.7 + c.s * 3;
+
+  const trem = a.createGain();
+  let attack = 0.02, sustain = 0.6;
+  let chain = filter;
+
+  // 感情ごとの「くせ」
+  const vibrato = (rate, cents) => {
+    const lfo = osc('sine', rate);
+    const depth = a.createGain(); depth.gain.value = cents;
+    lfo.connect(depth);
+    oscs.forEach(o => depth.connect(o.detune));
+  };
+  const tremolo = (rate, amount) => {
+    trem.gain.value = 1 - amount / 2;
+    const lfo = osc('sine', rate);
+    const depth = a.createGain(); depth.gain.value = amount / 2;
+    lfo.connect(depth).connect(trem.gain);
+  };
+  const addPartial = (mult, gain) => {
+    const o = osc('sine', c.freq * mult);
+    const g = a.createGain(); g.gain.value = gain;
+    o.connect(g).connect(sum);
+    oscs.push(o);
+  };
+
+  switch (c.emotion) {
+    case 'Clarity':
+      addPartial(2, 0.25); addPartial(3, 0.12); addPartial(4, 0.06);
+      filter.frequency.value = 9000;
+      break;
+    case 'Depth': {
+      const n = a.createBufferSource(); n.buffer = noiseBuf; n.loop = true; sources.push(n);
+      const bp = a.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = c.freq * 2; bp.Q.value = 3;
+      const ng = a.createGain(); ng.gain.value = 0.8;
+      n.connect(bp).connect(ng).connect(sum);
+      attack = 0.12;
+      break;
+    }
+    case 'Passion': {
+      const sh = a.createWaveShaper();
+      const curve = new Float32Array(1024);
+      for (let k = 0; k < curve.length; k++) { const x = k / 511.5 - 1; curve[k] = Math.tanh(3 * x); }
+      sh.curve = curve;
+      const pre = a.createGain(); pre.gain.value = 0.6;
+      filter.connect(pre).connect(sh);
+      chain = sh;
+      break;
+    }
+    case 'Warmth':
+      [-9, 9].forEach(d => {
+        const o = osc('sawtooth', c.freq, d);
+        const g = a.createGain(); g.gain.value = 0.15;
+        o.connect(g).connect(sum);
+      });
+      break;
+    case 'Joy':        vibrato(6.5, 12); break;
+    case 'Freshness':  attack = 0.004; sustain = 0.25; addPartial(2, 0.15); break;
+    case 'Peace':      tremolo(1.8, 0.3); attack = 0.06; break;
+    case 'Calm':       tremolo(0.5, 0.45); attack = 0.25; sustain = 0.8; break;
+    case 'Melancholy': vibrato(4.5, 14); attack = 0.1; break;
+    case 'Mystery': {
+      vibrato(0.7, 35);
+      const lfo = osc('sine', 0.4);
+      const d = a.createGain(); d.gain.value = filter.frequency.value * 0.6;
+      lfo.connect(d).connect(filter.frequency);
+      attack = 0.15;
+      break;
+    }
+    case 'Creativity': {
+      const mod = osc('sine', c.freq * 2);
+      const d = a.createGain(); d.gain.value = c.freq * 1.5;
+      mod.connect(d);
+      oscs.forEach(o => d.connect(o.frequency));
+      break;
+    }
+  }
+
+  sum.connect(filter);
+  chain.connect(trem);
+  sources.forEach(s => s.start(t0));
+  return { out: trem, sources, attack, sustain };
+}
+
+// 色の情報（freq, s, emotion, volume）から1音鳴らす。写真の色でも、試聴パネルの仮の色でも使える
+function playColor(c, delay, dur, gainScale = 1) {
+  const a = audio();
+  const t0 = a.currentTime + delay + 0.02;
+  const end = t0 + dur;
+  const { out, sources, attack, sustain } = buildVoice(c, t0);
+  const env = a.createGain();
+  const peak = 0.22 * c.volume * gainScale;
+  // 立ち上がり → 少し減衰 → 伸ばす → 余韻を残して消える
+  const decay = Math.min(0.8, (dur - attack) * 0.3);
+  const release = Math.min(3, Math.max(0.3, dur * 0.3));
+  const relStart = Math.max(t0 + attack + decay, end - release);
+  const susLevel = Math.max(peak * sustain, 0.0001);
+  env.gain.setValueAtTime(0, t0);
+  env.gain.linearRampToValueAtTime(peak, t0 + attack);
+  env.gain.exponentialRampToValueAtTime(susLevel, t0 + attack + decay);
+  env.gain.setValueAtTime(susLevel, relStart);
+  env.gain.exponentialRampToValueAtTime(0.0001, end);
+  out.connect(env).connect(master);
+  sources.forEach(s => s.stop(end + 0.05));
+  return { env, sources };
+}
+
+function play(i, delay, dur, gainScale = 1) {
+  const voice = playColor(colors[i], delay, dur, gainScale);
+  const chip = $('colors').children[i];
+  setTimeout(() => chip && chip.classList.add('playing'), (delay + 0.02) * 1000);
+  setTimeout(() => chip && chip.classList.remove('playing'), (delay + dur) * 1000);
+  return voice;
+}
+
+// 鳴っている音を短いフェードで止める（プツッとならないように）
+function fadeOut(voice) {
+  const now = ctx.currentTime;
+  const g = voice.env.gain;
+  g.cancelScheduledValues(now);
+  g.setValueAtTime(g.value, now);
+  g.linearRampToValueAtTime(0, now + 0.2);
+  voice.sources.forEach(s => { try { s.stop(now + 0.25); } catch (e) {} });
+}
+
+/* ---------- 鳴らし方 ---------- */
+let harmonyVoices = [], harmonyTimer = null;
+function harmonyDone() {
+  clearTimeout(harmonyTimer); harmonyTimer = null;
+  harmonyVoices = [];
+  $('harmony').classList.remove('on');
+  $('harmony').textContent = 'Harmony（和音）';
+}
+function stopHarmony() {
+  if (!harmonyVoices.length) return;
+  harmonyVoices.forEach(fadeOut);
+  [...$('colors').children].forEach(ch => ch.classList.remove('playing'));
+  harmonyDone();
+}
+$('harmony').onclick = () => {
+  if (harmonyVoices.length) { stopHarmony(); return; }
+  stopRandom();
+  stopScan();
+  const norm = 1 / Math.sqrt(colors.length);
+  const len = +$('hlen').value;
+  harmonyVoices = colors.map((c, i) => play(i, i * 0.03, len, c.presence * norm * 1.6));
+  $('harmony').classList.add('on');
+  $('harmony').textContent = 'Harmony を止める';
+  harmonyTimer = setTimeout(harmonyDone, (len + 0.3) * 1000);
+};
+$('hlen').oninput = e => { $('hlenVal').textContent = e.target.value; };
+
+let randTimer = null;
+function pickByArea() {
+  let r = Math.random(), acc = 0;
+  for (let i = 0; i < colors.length; i++) { acc += colors[i].share; if (r <= acc) return i; }
+  return colors.length - 1;
+}
+function tick() {
+  play(pickByArea(), 0, 0.6 + Math.random() * 1.0);
+  if (Math.random() < 0.2) play(pickByArea(), 0.1, 1.2, 0.7);
+  randTimer = setTimeout(tick, (0.25 + Math.random() * 0.45) * 1000);
+}
+function stopRandom() {
+  clearTimeout(randTimer); randTimer = null;
+  $('random').classList.remove('on');
+  $('random').textContent = 'Random（自動演奏）';
+}
+$('random').onclick = () => {
+  if (randTimer) { stopRandom(); return; }
+  stopHarmony();
+  stopScan();
+  audio();
+  $('random').classList.add('on');
+  $('random').textContent = 'Random を止める';
+  tick();
+};
+
+/* ---------- Scan（写真を読む） ---------- */
+// 全色を鳴らし続け、写真の上を往復する帯の中にある色の割合で音量を決める。
+// さらに色ごとに周期の違うゆっくりした揺らぎを掛けて、機械的になりすぎないようにする。
+const BAND = 0.12;            // 帯の幅（写真の横幅に対する割合）
+let scan = null;
+
+// dir = 'x'：縦の帯が左右に動く（横スキャン） / 'y'：横の帯が上下に動く（縦スキャン）
+function scanFractions(p, dir) {
+  const { grid, W, h } = scanGrid;
+  const f = new Float32Array(colors.length);
+  const len = dir === 'y' ? h : W;
+  const half = Math.max(1, Math.round(len * BAND / 2));
+  const c = Math.round(p * (len - 1));
+  const lo = Math.max(0, c - half), hi = Math.min(len - 1, c + half);
+  let total = 0;
+  const add = r => { if (r >= 0) { f[r]++; total++; } };
+  if (dir === 'y') {
+    for (let y = lo; y <= hi; y++) for (let x = 0; x < W; x++) add(grid[y * W + x]);
+  } else {
+    for (let x = lo; x <= hi; x++) for (let y = 0; y < h; y++) add(grid[y * W + x]);
+  }
+  if (total) for (let i = 0; i < f.length; i++) f[i] /= total;
+  return f;
+}
+
+function startScan() {
+  stopHarmony(); stopRandom();
+  const a = audio();
+  const t0 = a.currentTime + 0.05;
+  const voices = colors.map(c => {
+    const v = buildVoice(c, t0);
+    const g = a.createGain(); g.gain.value = 0;
+    v.out.connect(g).connect(master);
+    return { env: g, sources: v.sources, period: 7 + Math.random() * 10, phase: Math.random() * Math.PI * 2 };
+  });
+  scan = { voices, phase: 0, last: 0, lastAudio: 0, raf: 0 };
+  $('scanLine').style.display = 'block';
+  $('scan').classList.add('on');
+  $('scan').textContent = 'Scan を止める';
+
+  const loop = now => {
+    if (!scan) return;
+    const dt = scan.last ? now - scan.last : 0;
+    scan.last = now;
+    scan.phase += dt / (+$('sweep').value * 1000);
+    const p = 1 - Math.abs((scan.phase % 2) - 1);        // 端 → 端 → 端 と往復
+    const dir = $('scanDir').value;
+    const line = $('scanLine');
+    line.classList.toggle('vertical', dir === 'y');
+    line.style.left = dir === 'y' ? '' : (p * 100) + '%';
+    line.style.top = dir === 'y' ? (p * 100) + '%' : '';
+
+    if (now - scan.lastAudio > 50) {
+      scan.lastAudio = now;
+      const f = scanFractions(p, dir);
+      const at = ctx.currentTime, sec = now / 1000;
+      const chips = $('colors').children;
+      scan.voices.forEach((v, i) => {
+        const c = colors[i];
+        const drift = 0.75 + 0.25 * Math.sin(2 * Math.PI * sec / v.period + v.phase);
+        const amp = (0.85 * Math.pow(f[i], 0.7) + 0.15 * c.share) * drift;
+        v.env.gain.setTargetAtTime(0.25 * c.volume * amp, at, 0.35);
+        if (chips[i]) chips[i].classList.toggle('playing', f[i] > 0.15);
+      });
+    }
+    scan.raf = requestAnimationFrame(loop);
+  };
+  scan.raf = requestAnimationFrame(loop);
+}
+
+function stopScan() {
+  if (!scan) return;
+  cancelAnimationFrame(scan.raf);
+  const now = ctx.currentTime;
+  scan.voices.forEach(v => {
+    const g = v.env.gain;
+    g.cancelScheduledValues(now);
+    g.setValueAtTime(g.value, now);
+    g.setTargetAtTime(0, now, 0.25);
+    v.sources.forEach(s => s.stop(now + 1.5));
+  });
+  scan = null;
+  $('scanLine').style.display = 'none';
+  $('scan').classList.remove('on');
+  $('scan').textContent = 'Scan（写真を読む）';
+  [...$('colors').children].forEach(ch => ch.classList.remove('playing'));
+}
+
+$('scan').onclick = () => (scan ? stopScan() : startScan());
+
+/* ---------- 音色の試聴パネル ---------- */
+const LAB = [
+  ['Clarity', '#f4f1ea'], ['Depth', '#151515'], ['Neutral', '#8a8a8a'],
+  ['Passion', '#e03131'], ['Warmth', '#f08c00'], ['Joy', '#e8e000'],
+  ['Freshness', '#6cc04a'], ['Peace', '#2f9e44'], ['Calm', '#1aa3a3'],
+  ['Melancholy', '#1c4fa8'], ['Mystery', '#7b2cbf'], ['Creativity', '#d63384']
+];
+
+function labColor(emotion) {
+  return {
+    emotion,
+    freq: midiToFreq(+$('labPitch').value),
+    s: +$('labSat').value / 100,
+    volume: 0.15 + 0.85 * (+$('labVal').value / 100)
+  };
+}
+
+function labPlay(k) {
+  const dur = +$('labLen').value;
+  const voice = playColor(labColor(LAB[k][0]), 0, dur);
+  const btn = $('labGrid').children[k];
+  btn.classList.add('playing');
+  setTimeout(() => btn.classList.remove('playing'), dur * 1000);
+  return voice;
+}
+
+LAB.forEach(([emo, hex], k) => {
+  const b = document.createElement('button');
+  b.className = 'labBtn';
+  b.innerHTML = `<span class="dot" style="background:${hex}"></span><span><b>${emo}</b><small>${QUIRKS[emo]}</small></span>`;
+  b.onclick = () => labPlay(k);
+  $('labGrid').appendChild(b);
+});
+
+let labSeq = null;
+function stopLabSeq() {
+  if (!labSeq) return;
+  labSeq.timers.forEach(clearTimeout);
+  labSeq.voices.forEach(fadeOut);
+  labSeq = null;
+  $('labAll').classList.remove('on');
+  $('labAll').textContent = '12種類を順番に鳴らす';
+  [...$('labGrid').children].forEach(b => b.classList.remove('playing'));
+}
+$('labAll').onclick = () => {
+  if (labSeq) { stopLabSeq(); return; }
+  const gap = (+$('labLen').value + 0.3) * 1000;
+  labSeq = { timers: [], voices: [] };
+  LAB.forEach((_, k) => labSeq.timers.push(setTimeout(() => { if (labSeq) labSeq.voices.push(labPlay(k)); }, k * gap)));
+  labSeq.timers.push(setTimeout(stopLabSeq, LAB.length * gap));
+  $('labAll').classList.add('on');
+  $('labAll').textContent = '止める';
+};
+
+const labLabels = () => {
+  $('labPitchVal').textContent = midiName(+$('labPitch').value);
+  $('labSatVal').textContent = $('labSat').value;
+  $('labValVal').textContent = $('labVal').value;
+  $('labLenVal').textContent = $('labLen').value;
+};
+['labPitch', 'labSat', 'labVal', 'labLen'].forEach(id => { $(id).oninput = labLabels; });
+labLabels();
+$('sweep').oninput = e => { $('sweepVal').textContent = e.target.value; };
+</script>
+</body>
+</html>
