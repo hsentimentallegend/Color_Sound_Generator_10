@@ -1,8 +1,10 @@
-# 色を音に — Color Sound
+# Color Sound Generator Version 10
+
+An improved version of the app used in the 2023 solo exhibition *The Color Cleanser*.
 
 写真の色を音に変えるWebアプリです。写真から主な色を取り出し、その色の組み合わせから「調」を決め、色をひとつずつ音として鳴らします。
 
-**デモ：** （GitHub Pages のURLをここに記載）
+**デモ：** https://hsentimentallegend.github.io/Color_Sound_Generator_10/
 
 HTMLファイル1つで動きます。外部ライブラリは使わず、音はすべてブラウザの Web Audio API で、その場で合成しています。
 
