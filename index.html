@@ -39,6 +39,17 @@
     border: 0; border-top: 2px solid #fff; border-bottom: 2px solid #fff;
   }
   #result { display: none; }
+  .scanbox { margin-top: 12px; display: flex; flex-wrap: wrap; gap: 12px 20px; align-items: center; }
+  button.play {
+    font-size: 1.25rem; font-weight: 600; padding: 14px 34px; border-radius: 999px;
+    background: var(--accent); color: #fff; border-color: transparent; min-width: 160px;
+  }
+  button.play.on { outline: 3px solid var(--accent); outline-offset: 3px; }
+  .scanopts { display: flex; flex-wrap: wrap; gap: 8px 20px; align-items: center; font-size: .85rem; color: var(--muted); }
+  .scanopts label { display: flex; align-items: center; gap: 6px; }
+  .scanopts input[type=range] { width: 110px; }
+  details.others { margin-top: 16px; padding: 10px 14px; border: 1px solid var(--line); border-radius: 12px; }
+  details.others summary { cursor: pointer; color: var(--muted); font-size: .9rem; }
   .key { margin-top: 16px; padding: 14px 16px; background: var(--card); border: 1px solid var(--line); border-radius: 12px; display: flex; gap: 14px; align-items: center; }
   .key .dot { width: 44px; height: 44px; border-radius: 50%; flex: none; border: 1px solid var(--line); }
   .key .big { font-size: 1.15rem; font-weight: 600; }
@@ -54,6 +65,7 @@
   .info { padding: 8px 10px; font-size: .8rem; }
   .emo { font-weight: 600; }
   .note { font-size: 1.1rem; font-weight: 600; }
+  .moved { color: var(--accent); font-weight: 600; }
   .meta { color: var(--muted); }
   .bar { height: 4px; background: var(--line); border-radius: 2px; margin: 3px 0 6px; }
   .bar > i { display: block; height: 100%; background: var(--accent); border-radius: 2px; }
@@ -74,7 +86,7 @@
 <main>
   <h1>Color Sound Generator Version 10</h1>
   <p class="lead">An improved version of the app used in the 2023 solo exhibition <i>The Color Cleanser</i>.</p>
-  <p class="sub">写真の色から「調」を決め、取り出した色をそれぞれ1つの音として鳴らします。</p>
+  <p class="sub">写真を読み込んで再生すると、光の帯が写真の上をゆっくり通り過ぎ、帯の中にある色が音になって響きます。写真の構図そのものが楽譜になります。</p>
 
   <div class="row">
     <label class="btn" for="file">写真を選ぶ</label>
@@ -99,6 +111,20 @@
   </div>
 
   <div id="result">
+    <!-- メイン：Scan -->
+    <div class="scanbox">
+      <button id="scan" class="play">▶ 再生</button>
+      <div class="scanopts">
+        <label>向き
+          <select id="scanDir">
+            <option value="x">横スキャン（左右に動く）</option>
+            <option value="y">縦スキャン（上下に動く）</option>
+          </select>
+        </label>
+        <label>速さ（端から端まで） <input id="sweep" type="range" min="6" max="60" step="1" value="20"> <span id="sweepVal">20</span>秒</label>
+      </div>
+    </div>
+
     <div class="key">
       <div class="dot" id="keyDot"></div>
       <div>
@@ -107,37 +133,44 @@
       </div>
     </div>
 
-    <div class="row" style="margin-top:12px">
-      <button id="harmony" class="primary">Harmony（和音）</button>
-      <button id="scan">Scan（写真を読む）</button>
-      <button id="random">Random（自動演奏）</button>
-      <span class="meta">色をタップすると1音ずつ鳴ります</span>
-    </div>
-
     <div class="panel">
       <label>音量 <input id="vol" type="range" min="0" max="1" step="0.01" value="0.7"></label>
-      <label>Harmonyの長さ <input id="hlen" type="range" min="2" max="20" step="1" value="8"> <span id="hlenVal">8</span>秒</label>
-      <label>Scanの向き
-        <select id="scanDir">
-          <option value="x">横スキャン（左右に動く）</option>
-          <option value="y">縦スキャン（上下に動く）</option>
+      <label>音の被り
+        <select id="collide">
+          <option value="none">そのまま</option>
+          <option value="shift">隣の音へずらす</option>
+          <option value="octave">オクターブ上げる</option>
         </select>
       </label>
-      <label>Scanの速さ（端から端まで） <input id="sweep" type="range" min="6" max="60" step="1" value="20"> <span id="sweepVal">20</span>秒</label>
+      <label>タップ音の長さ <input id="tlen" type="range" min="0.2" max="6" step="0.1" value="4"> <span id="tlenVal">4</span>秒</label>
       <label><input id="crush" type="checkbox"> ビットクラッシュ<span id="crushKind"></span></label>
       <label>ビット数 <input id="bits" type="range" min="1" max="8" step="1" value="4"> <span id="bitsVal">4</span></label>
       <label>サンプルレート <input id="rate" type="range" min="1000" max="44100" step="100" value="8000"> <span id="rateVal">8000</span>Hz</label>
     </div>
 
+    <p class="meta" style="margin:14px 0 0">色をタップすると、その色の音を重ねて鳴らせます。</p>
     <div id="colors"></div>
+
+    <!-- 控えめ：ほかの鳴らし方 -->
+    <details class="others">
+      <summary>ほかの鳴らし方（Harmony / Random）</summary>
+      <div class="row" style="margin-top:10px">
+        <button id="harmony">Harmony（和音）</button>
+        <label class="meta" style="display:flex;align-items:center;gap:6px;font-size:.85rem">長さ <input id="hlen" type="range" min="2" max="20" step="1" value="8"> <span id="hlenVal">8</span>秒</label>
+      </div>
+      <div class="row" style="margin-top:8px">
+        <button id="random">Random（自動演奏）</button>
+        <span class="meta" style="font-size:.85rem">面積の大きい色ほど出やすいメロディ</span>
+      </div>
+    </details>
   </div>
 
   <ul class="legend">
+    <li>Scan：全部の色を鳴らし続け、写真の上を動く帯の中にある色ほど大きく聞こえます。写真の構図がそのまま楽譜になります</li>
     <li>いちばん強い色（面積 × 彩度）の感情で、写真全体のスケールと主音が決まります</li>
     <li>色相 → そのスケールの中での音の位置（2オクターブ）。無彩色は明るさで位置を決めます</li>
     <li>明るさ → 音量（とても暗い色は1オクターブ下）／ 彩度 → 音色（やわらかい ↔ 鋭い）</li>
-    <li>面積 → 和音での存在感と、自動演奏での出やすさ ／ 感情 → 音のくせ</li>
-    <li>Scan：全部の色を鳴らし続け、写真の上を動く帯の中にある色ほど大きく聞こえます</li>
+    <li>面積 → Scan 中にかすかに残る音の大きさ、和音での存在感 ／ 感情 → 音のくせ</li>
   </ul>
 
   <section id="lab">
@@ -344,21 +377,53 @@ function analyze(source) {
   const dom = colors.reduce((a, b) => (b.strength > a.strength ? b : a));
   const rootMidi = 48 + (((freqToMidi(dom.baseFreq) - 48) % 12) + 12) % 12;
   keyInfo = { dom, rootMidi, scale: dom.scale };
-  const steps = SCALES[dom.scale].steps;
-  const range = steps.length * 2;
-
-  // 層2：色ごとに音を決める
   colors.forEach(c => {
     c.isDominant = c === dom;
-    const pos = c.s < 0.2 ? c.v : c.h;                 // 無彩色は明るさで位置を決める
-    const idx = Math.min(range - 1, Math.floor(pos * range));
-    let midi = rootMidi + 12 * Math.floor(idx / steps.length) + steps[idx % steps.length];
-    if (c.v < 0.25) midi -= 12;                          // とても暗い色は1オクターブ下
+    c.volume = 0.15 + 0.85 * c.v;                        // 明るさ → 音量
+    c.presence = 0.5 + 0.5 * Math.sqrt(c.share / colors[0].share); // 面積 → 和音での存在感
+  });
+  assignNotes();
+}
+
+// 層2：色ごとに音の高さを決める。同じ音が重なった時の扱いは「音の被り」の設定で変わる
+function assignNotes() {
+  const { rootMidi, scale } = keyInfo;
+  const steps = SCALES[scale].steps;
+  const range = steps.length * 2;
+  const midiOf = (idx, oct) => rootMidi + 12 * Math.floor(idx / steps.length) + steps[idx % steps.length] + 12 * oct;
+  const mode = $('collide').value;
+
+  colors.forEach(c => {
+    c.pos = c.s < 0.2 ? c.v : c.h;                       // 無彩色は明るさで位置を決める
+    c.idx = Math.min(range - 1, Math.floor(c.pos * range));
+    c.oct = c.v < 0.25 ? -1 : 0;                         // とても暗い色は1オクターブ下
+    c.origMidi = midiOf(c.idx, c.oct);
+    c.moved = '';
+  });
+
+  // 面積の大きい色から順に音を確定し、後から来た色を動かす（colors は面積順に並んでいる）
+  const used = new Map();                                // midi → その音を持つ色
+  colors.forEach(c => {
+    let midi = c.origMidi;
+    if (mode === 'shift' && used.has(midi)) {
+      // 被った相手より色相が高ければ上へ、低ければ下へ先に探す（並び順をなるべく保つ）
+      const dir = c.pos >= used.get(midi).pos ? 1 : -1;
+      for (let d = 1; d < range * 2; d++) {
+        const k = c.idx + dir * (d % 2 ? Math.ceil(d / 2) : -d / 2);
+        if (k < 0 || k >= range) continue;
+        const m = midiOf(k, c.oct);
+        if (!used.has(m)) { midi = m; c.moved = '→ずらし'; break; }
+      }
+    }
+    if ((mode === 'octave' || mode === 'shift') && used.has(midi)) {
+      let n = 0;
+      while (used.has(midi) && n < 3) { midi += 12; n++; }
+      c.moved = n === 1 ? '↑1オクターブ' : `↑${n}オクターブ`;
+    }
+    used.set(midi, c);
     c.midi = midi;
     c.freq = midiToFreq(midi);
     c.note = midiName(midi);
-    c.volume = 0.15 + 0.85 * c.v;                        // 明るさ → 音量
-    c.presence = 0.5 + 0.5 * Math.sqrt(c.share / colors[0].share); // 面積 → 和音での存在感
   });
 }
 
@@ -381,6 +446,7 @@ function render() {
       <div class="info">
         <div class="emo">${c.emotion}</div>
         <div class="note">${c.note} <span class="meta">${Math.round(c.freq)} Hz</span></div>
+        ${c.moved ? `<div class="moved">${c.moved}（元は ${midiName(c.origMidi)}）</div>` : ''}
         <div class="meta">${hexOf(c.rgb)} ・ 面積 ${Math.round(c.share * 100)}%</div>
         <div class="meta">音量（明るさ ${Math.round(c.v * 100)}%）</div>
         <div class="bar"><i style="width:${c.volume * 100}%"></i></div>
@@ -388,7 +454,7 @@ function render() {
         <div class="bar"><i style="width:${c.s * 100}%"></i></div>
         <div class="meta">くせ：${QUIRKS[c.emotion]}</div>
       </div>`;
-    el.onclick = () => play(i, 0, 1.6);
+    el.onclick = () => play(i, 0, +$('tlen').value);
     box.appendChild(el);
   });
 }
@@ -692,6 +758,7 @@ $('harmony').onclick = () => {
   harmonyTimer = setTimeout(harmonyDone, (len + 0.3) * 1000);
 };
 $('hlen').oninput = e => { $('hlenVal').textContent = e.target.value; };
+$('tlen').oninput = e => { $('tlenVal').textContent = e.target.value; };
 
 let randTimer = null;
 function pickByArea() {
@@ -757,7 +824,7 @@ function startScan() {
   scan = { voices, phase: 0, last: 0, lastAudio: 0, raf: 0 };
   $('scanLine').style.display = 'block';
   $('scan').classList.add('on');
-  $('scan').textContent = 'Scan を止める';
+  $('scan').textContent = '■ 停止';
 
   const loop = now => {
     if (!scan) return;
@@ -803,11 +870,19 @@ function stopScan() {
   scan = null;
   $('scanLine').style.display = 'none';
   $('scan').classList.remove('on');
-  $('scan').textContent = 'Scan（写真を読む）';
+  $('scan').textContent = '▶ 再生';
   [...$('colors').children].forEach(ch => ch.classList.remove('playing'));
 }
 
 $('scan').onclick = () => (scan ? stopScan() : startScan());
+
+// 「音の被り」を変えたら音の高さを決め直す（鳴っている和音・Scan は古い高さのままなので止める）
+$('collide').onchange = () => {
+  if (!colors.length) return;
+  stopHarmony(); stopScan();
+  assignNotes();
+  render();
+};
 
 /* ---------- 音色の試聴パネル ---------- */
 const LAB = [
