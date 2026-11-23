@@ -48,8 +48,18 @@
   .scanopts { display: flex; flex-wrap: wrap; gap: 8px 20px; align-items: center; font-size: .85rem; color: var(--muted); }
   .scanopts label { display: flex; align-items: center; gap: 6px; }
   .scanopts input[type=range] { width: 110px; }
-  details.others { margin-top: 16px; padding: 10px 14px; border: 1px solid var(--line); border-radius: 12px; }
-  details.others summary { cursor: pointer; color: var(--muted); font-size: .9rem; }
+  .glitch { margin-top: 24px; padding: 14px 16px; border-radius: 12px; background: #0d0d0f; color: #e8e8ea; border: 1px solid #2a2a30; }
+  .glitch h2 { margin: 0 0 2px; font-size: 1rem; letter-spacing: .08em; font-family: ui-monospace, Consolas, monospace; }
+  .glitch p { margin: 0 0 10px; font-size: .82rem; color: #a0a0a8; }
+  .glitch .row { gap: 10px 20px; font-size: .85rem; color: #a0a0a8; }
+  .glitch label { display: flex; align-items: center; gap: 6px; }
+  .glitch input[type=range] { width: 140px; }
+  button.gbtn { background: #ff2d55; color: #fff; border-color: transparent; font-weight: 600; font-family: ui-monospace, Consolas, monospace; min-width: 150px; }
+  button.gbtn.on { outline: 3px solid #ff2d55; outline-offset: 3px; background: #1a1a1f; }
+  #glitchBox {
+    display: none; position: absolute; pointer-events: none; mix-blend-mode: difference;
+    background: rgba(255,255,255,.85); outline: 1px solid #fff;
+  }
   .key { margin-top: 16px; padding: 14px 16px; background: var(--card); border: 1px solid var(--line); border-radius: 12px; display: flex; gap: 14px; align-items: center; }
   .key .dot { width: 44px; height: 44px; border-radius: 50%; flex: none; border: 1px solid var(--line); }
   .key .big { font-size: 1.15rem; font-weight: 600; }
@@ -104,6 +114,7 @@
   <div id="stage">
     <img id="preview" alt="選んだ写真">
     <div id="scanLine"></div>
+    <div id="glitchBox"></div>
   </div>
 
   <div id="result">
@@ -159,18 +170,15 @@
     <p class="meta" style="margin:14px 0 0">色に触れると、その色の音を重ねて鳴らせます。複数の指で同時に押すこともできます。</p>
     <div id="colors"></div>
 
-    <!-- 控えめ：ほかの鳴らし方 -->
-    <details class="others">
-      <summary>ほかの鳴らし方（Harmony / Random）</summary>
-      <div class="row" style="margin-top:10px">
-        <button id="harmony">Harmony（和音）</button>
-        <label class="meta" style="display:flex;align-items:center;gap:6px;font-size:.85rem">長さ <input id="hlen" type="range" min="2" max="20" step="1" value="8"> <span id="hlenVal">8</span>秒</label>
+    <!-- もう一つの顔：Glitch -->
+    <section class="glitch">
+      <h2>GLITCH</h2>
+      <p>写真をデータとして壊しながら読むモードです。ピクセルの並びをそのまま波形として鳴らし、色どうしが互いの音の高さを狂わせ合います。読む場所は写真の上をランダムに飛び回り、どもり、逆走し、突然黙ります。</p>
+      <div class="row">
+        <button id="glitch" class="gbtn">▶ Glitch</button>
+        <label>暴走度 <input id="chaos" type="range" min="0" max="100" step="1" value="50"> <span id="chaosVal">50</span>%</label>
       </div>
-      <div class="row" style="margin-top:8px">
-        <button id="random">Random（自動演奏）</button>
-        <span class="meta" style="font-size:.85rem">面積の大きい色ほど出やすいメロディ</span>
-      </div>
-    </details>
+    </section>
   </div>
 
   <ul class="legend">
@@ -178,7 +186,8 @@
     <li>いちばん強い色（面積 × 彩度）の感情で、写真全体のスケールと主音が決まります</li>
     <li>色相 → そのスケールの中での音の位置（2オクターブ）。無彩色は明るさで位置を決めます</li>
     <li>明るさ → 音量（とても暗い色は1オクターブ下）／ 彩度 → 音色（やわらかい ↔ 鋭い）</li>
-    <li>面積 → Scan 中にかすかに残る音の大きさ、和音での存在感 ／ 感情 → 音のくせ</li>
+    <li>面積 → Scan 中にかすかに残る音の大きさ ／ 感情 → 音のくせ</li>
+    <li>Glitch：ピクセルの R・G・B の値をそのまま波形にし、彩度の高い色ほど他の色を強く狂わせます</li>
   </ul>
 
 </main>
@@ -225,8 +234,7 @@ $('file').onchange = e => loadFile(e.target.files[0]);
 $('snap').onchange = e => loadFile(e.target.files[0]);
 
 function showImage(source, url) {
-  stopRandom();
-  stopHarmony();
+  stopGlitch();
   stopScan();
   $('preview').src = url;
   $('stage').style.display = 'inline-block';
@@ -319,7 +327,7 @@ function extractColors(source, k) {
   });
   return {
     list: order.map(j => ({ rgb: centers[j].slice(0, 3).map(Math.round), share: centers[j][3] / px.length })),
-    grid, W, h
+    grid, W, h, rgba: data
   };
 }
 
@@ -373,7 +381,6 @@ function analyze(source) {
   colors.forEach(c => {
     c.isDominant = c === dom;
     c.volume = 0.15 + 0.85 * c.v;                        // 明るさ → 音量
-    c.presence = 0.5 + 0.5 * Math.sqrt(c.share / colors[0].share); // 面積 → 和音での存在感
   });
   assignNotes();
 }
@@ -685,47 +692,6 @@ function buildVoice(c, t0) {
   return { out: trem, sources, attack, sustain };
 }
 
-// 色の情報（freq, s, emotion, volume）から1音鳴らす（Harmony・Random 用）
-function playColor(c, delay, dur, gainScale = 1) {
-  const a = audio();
-  const t0 = a.currentTime + delay + 0.02;
-  const end = t0 + dur;
-  const { out, sources, attack, sustain } = buildVoice(c, t0);
-  const env = a.createGain();
-  const peak = 0.22 * c.volume * gainScale;
-  // 立ち上がり → 少し減衰 → 伸ばす → 余韻を残して消える
-  const decay = Math.min(0.8, (dur - attack) * 0.3);
-  const release = Math.min(3, Math.max(0.3, dur * 0.3));
-  const relStart = Math.max(t0 + attack + decay, end - release);
-  const susLevel = Math.max(peak * sustain, 0.0001);
-  env.gain.setValueAtTime(0, t0);
-  env.gain.linearRampToValueAtTime(peak, t0 + attack);
-  env.gain.exponentialRampToValueAtTime(susLevel, t0 + attack + decay);
-  env.gain.setValueAtTime(susLevel, relStart);
-  env.gain.exponentialRampToValueAtTime(0.0001, end);
-  out.connect(env).connect(master);
-  sources.forEach(s => s.stop(end + 0.05));
-  return { env, sources };
-}
-
-function play(i, delay, dur, gainScale = 1) {
-  const voice = playColor(colors[i], delay, dur, gainScale);
-  const chip = $('colors').children[i];
-  setTimeout(() => chip && chip.classList.add('playing'), (delay + 0.02) * 1000);
-  setTimeout(() => chip && chip.classList.remove('playing'), (delay + dur) * 1000);
-  return voice;
-}
-
-// 鳴っている音を短いフェードで止める（プツッとならないように）
-function fadeOut(voice) {
-  const now = ctx.currentTime;
-  const g = voice.env.gain;
-  g.cancelScheduledValues(now);
-  g.setValueAtTime(g.value, now);
-  g.linearRampToValueAtTime(0, now + 0.2);
-  voice.sources.forEach(s => { try { s.stop(now + 0.25); } catch (e) {} });
-}
-
 /* ---------- パレットの演奏 ----------
    長さ：音が鳴り続ける時間（押している間モードでは、指を離すまで）
    減衰：0% なら同じ大きさで伸び、100% なら弦をはじいたようにすぐ小さくなる
@@ -802,59 +768,7 @@ $('tdecay').oninput = e => { $('tdecayVal').textContent = e.target.value; };
 $('trel').oninput = e => { $('trelVal').textContent = e.target.value; };
 syncTapMode();
 
-/* ---------- 鳴らし方 ---------- */
-let harmonyVoices = [], harmonyTimer = null;
-function harmonyDone() {
-  clearTimeout(harmonyTimer); harmonyTimer = null;
-  harmonyVoices = [];
-  $('harmony').classList.remove('on');
-  $('harmony').textContent = 'Harmony（和音）';
-}
-function stopHarmony() {
-  if (!harmonyVoices.length) return;
-  harmonyVoices.forEach(fadeOut);
-  [...$('colors').children].forEach(ch => ch.classList.remove('playing'));
-  harmonyDone();
-}
-$('harmony').onclick = () => {
-  if (harmonyVoices.length) { stopHarmony(); return; }
-  stopRandom();
-  stopScan();
-  const norm = 1 / Math.sqrt(colors.length);
-  const len = +$('hlen').value;
-  harmonyVoices = colors.map((c, i) => play(i, i * 0.03, len, c.presence * norm * 1.6));
-  $('harmony').classList.add('on');
-  $('harmony').textContent = 'Harmony を止める';
-  harmonyTimer = setTimeout(harmonyDone, (len + 0.3) * 1000);
-};
-$('hlen').oninput = e => { $('hlenVal').textContent = e.target.value; };
 $('tlen').oninput = e => { $('tlenVal').textContent = e.target.value; };
-
-let randTimer = null;
-function pickByArea() {
-  let r = Math.random(), acc = 0;
-  for (let i = 0; i < colors.length; i++) { acc += colors[i].share; if (r <= acc) return i; }
-  return colors.length - 1;
-}
-function tick() {
-  play(pickByArea(), 0, 0.6 + Math.random() * 1.0);
-  if (Math.random() < 0.2) play(pickByArea(), 0.1, 1.2, 0.7);
-  randTimer = setTimeout(tick, (0.25 + Math.random() * 0.45) * 1000);
-}
-function stopRandom() {
-  clearTimeout(randTimer); randTimer = null;
-  $('random').classList.remove('on');
-  $('random').textContent = 'Random（自動演奏）';
-}
-$('random').onclick = () => {
-  if (randTimer) { stopRandom(); return; }
-  stopHarmony();
-  stopScan();
-  audio();
-  $('random').classList.add('on');
-  $('random').textContent = 'Random を止める';
-  tick();
-};
 
 /* ---------- Scan（写真を読む） ---------- */
 // 全色を鳴らし続け、写真の上を往復する帯の中にある色の割合で音量を決める。
@@ -882,7 +796,7 @@ function scanFractions(p, dir) {
 }
 
 function startScan() {
-  stopHarmony(); stopRandom();
+  stopGlitch();
   const a = audio();
   const t0 = a.currentTime + 0.05;
   const voices = colors.map(c => {
@@ -946,15 +860,238 @@ function stopScan() {
 
 $('scan').onclick = () => (scan ? stopScan() : startScan());
 
-// 「音の被り」を変えたら音の高さを決め直す（鳴っている和音・Scan は古い高さのままなので止める）
+// 「音の被り」を変えたら音の高さを決め直す（鳴っている Scan・Glitch は古い高さのままなので止める）
 $('collide').onchange = () => {
   if (!colors.length) return;
-  stopHarmony(); stopScan();
+  stopGlitch(); stopScan();
   assignNotes();
   render();
 };
 
 $('sweep').oninput = e => { $('sweepVal').textContent = e.target.value; };
+
+/* ---------- Glitch（写真をデータとして壊しながら読む） ----------
+   2つの音源を「暴走度」で暴れさせる。
+   1. ピクセル・グリッチ：写真の R,G,B の値をそのまま並べた生データを波形として鳴らす。
+      読む場所は写真の上をワープし、短い区間をどもるように繰り返し、ときどき逆再生になる
+   2. カオス・ネットワーク：色ごとの発振器を輪につなぎ、隣の色の音で自分の音の高さを揺さぶる（相互FM）。
+      輪の途中に短いディレイを挟んでいるので音が自分に戻ってきて、状態が予測できない方向に崩れる。
+      彩度が高い色ほど相手を強く狂わせる
+   最後に強いリミッターを通して、急な大音量で耳やスピーカーを傷めないようにしている */
+let glitch = null;
+
+const chaosAmt = () => +$('chaos').value / 100;
+const rnd = (a, b) => a + Math.random() * (b - a);
+const pick = arr => arr[Math.floor(Math.random() * arr.length)];
+
+// 写真の生データ（R,G,B を順に並べたもの）を音のバッファにする。逆再生用に反転版も作る
+function pixelBuffers() {
+  const { W, h, rgba } = scanGrid;
+  const rowLen = W * 3, n = rowLen * h;
+  const fwd = ctx.createBuffer(1, n, ctx.sampleRate), rev = ctx.createBuffer(1, n, ctx.sampleRate);
+  const f = fwd.getChannelData(0), r = rev.getChannelData(0);
+  for (let y = 0; y < h; y++) {
+    let sum = 0;
+    const base = y * rowLen;
+    for (let x = 0; x < W; x++) for (let k = 0; k < 3; k++) {
+      const v = rgba[(y * W + x) * 4 + k] / 127.5 - 1;
+      f[base + x * 3 + k] = v; sum += v;
+    }
+    const m = sum / rowLen;                                   // 行ごとに平均を引いて、音の中心を 0 に戻す
+    for (let i = 0; i < rowLen; i++) f[base + i] -= m;
+  }
+  for (let i = 0; i < n; i++) r[i] = f[n - 1 - i];
+  return { fwd, rev, rowLen, n };
+}
+
+// 歪みのカーブ（暴走度が高いほど強くつぶす）
+function driveCurve(ch) {
+  const k = 1 + ch * 14, N = 1024, curve = new Float32Array(N);
+  for (let i = 0; i < N; i++) { const x = i / (N - 1) * 2 - 1; curve[i] = Math.tanh(k * x) / Math.tanh(k); }
+  return curve;
+}
+
+// 写真の一部（四角）の中にある色の割合
+function regionFractions(x0, y0, x1, y1) {
+  const { grid, W } = scanGrid;
+  const f = new Float32Array(colors.length);
+  let total = 0;
+  for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+    const r = grid[y * W + x];
+    if (r >= 0) { f[r]++; total++; }
+  }
+  if (total) for (let i = 0; i < f.length; i++) f[i] /= total;
+  return f;
+}
+
+function startGlitch() {
+  stopScan();
+  const a = audio();
+  const t0 = a.currentTime + 0.05;
+  const ch = chaosAmt();
+
+  // 出口：まとめ → 歪み → 低音のゴミ取り → リミッター → master
+  const out = a.createGain(); out.gain.value = 0;
+  out.gain.setTargetAtTime(0.45, t0, 0.05);   // リミッターは自動で音量を持ち上げるので、ここで Scan と同じくらいに戻す
+  const limiter = a.createDynamicsCompressor();
+  limiter.threshold.value = -14; limiter.knee.value = 0; limiter.ratio.value = 20;
+  limiter.attack.value = 0.001; limiter.release.value = 0.08;
+  const hp = a.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 35;
+  const shaper = a.createWaveShaper(); shaper.curve = driveCurve(ch); shaper.oversample = '2x';
+  const bus = a.createGain(); bus.gain.value = 1;
+  bus.connect(shaper).connect(hp).connect(limiter).connect(out).connect(master);
+
+  // カオス・ネットワーク
+  const n = colors.length;
+  const voices = colors.map(c => {
+    const osc = a.createOscillator();
+    osc.type = c.s < 0.33 ? 'sine' : c.s < 0.66 ? 'triangle' : 'sawtooth';
+    osc.frequency.value = c.freq;
+    const amp = a.createGain(); amp.gain.value = 0;
+    const pan = a.createStereoPanner ? a.createStereoPanner() : a.createGain();
+    osc.connect(amp).connect(pan).connect(bus);
+    const delay = a.createDelay(0.1); delay.delayTime.value = rnd(0.001, 0.02);
+    const mod = a.createGain(); mod.gain.value = 0;
+    osc.connect(delay).connect(mod);
+    osc.start(t0);
+    return { c, osc, amp, pan, delay, mod };
+  });
+  voices.forEach((v, i) => v.mod.connect(voices[(i + 1) % n].osc.frequency));   // 輪につなぐ
+
+  glitch = {
+    out, bus, shaper, voices, bufs: pixelBuffers(), grains: new Set(),
+    cx: Math.random(), cy: Math.random(), timer: 0, silentUntil: 0
+  };
+  $('glitchBox').style.display = 'block';
+  $('glitch').classList.add('on');
+  $('glitch').textContent = '■ 停止';
+  glitchEvent();
+}
+
+// 一定でない間隔で次々に「事件」を起こす
+function glitchEvent() {
+  if (!glitch) return;
+  const g = glitch, ch = chaosAmt();
+  const now = ctx.currentTime, t = now + 0.01;
+  const { W, h } = scanGrid;
+
+  // 1. 読む場所を動かす（暴走度が高いほどワープしやすい）
+  if (Math.random() < 0.25 + 0.65 * ch) { g.cx = Math.random(); g.cy = Math.random(); }
+  else {
+    g.cx = Math.min(1, Math.max(0, g.cx + rnd(-0.08, 0.08)));
+    g.cy = Math.min(1, Math.max(0, g.cy + rnd(-0.08, 0.08)));
+  }
+  const bw = rnd(0.04, 0.12 + 0.25 * (1 - ch)), bh = rnd(0.04, 0.12 + 0.25 * (1 - ch));
+  const x0 = Math.floor(Math.max(0, g.cx - bw / 2) * (W - 1)), x1 = Math.ceil(Math.min(1, g.cx + bw / 2) * (W - 1));
+  const y0 = Math.floor(Math.max(0, g.cy - bh / 2) * (h - 1)), y1 = Math.ceil(Math.min(1, g.cy + bh / 2) * (h - 1));
+  const f = regionFractions(x0, y0, x1, y1);
+  const box = $('glitchBox').style;
+  box.left = (x0 / W * 100) + '%'; box.top = (y0 / h * 100) + '%';
+  box.width = ((x1 - x0 + 1) / W * 100) + '%'; box.height = ((y1 - y0 + 1) / h * 100) + '%';
+
+  // その場所でいちばん多い色
+  let main = 0;
+  f.forEach((v, i) => { if (v > f[main]) main = i; });
+  const chips = $('colors').children;
+  [...chips].forEach((el, i) => el.classList.toggle('playing', f[i] > 0.2));
+
+  // 2. 突然黙る
+  if (t > g.silentUntil && Math.random() < 0.03 + 0.1 * ch) {
+    const len = rnd(0.05, 0.25 + 0.6 * Math.random());
+    g.bus.gain.setValueAtTime(0, t);
+    g.bus.gain.setValueAtTime(1, t + len);
+    g.silentUntil = t + len;
+  }
+
+  // 3. カオス・ネットワークを揺さぶる
+  g.voices.forEach((v, i) => {
+    const c = v.c;
+    // 高さ：その色の音を基準に、ときどきオクターブを飛ぶ・サイレンのように滑る
+    if (Math.random() < 0.15 + 0.5 * ch) {
+      const target = c.freq * Math.pow(2, pick([-2, -1, 0, 0, 1, 2, 3]) * (Math.random() < ch ? 1 : 0));
+      if (Math.random() < 0.3 * ch) v.osc.frequency.exponentialRampToValueAtTime(Math.max(20, target * rnd(0.25, 4)), t + rnd(0.05, 0.6));
+      else v.osc.frequency.setValueAtTime(target, t);
+    }
+    // 狂わせる強さ：彩度が高い色ほど強い
+    const index = Math.pow(Math.random(), 2) * (0.3 + c.s) * ch * 9;
+    v.mod.gain.setTargetAtTime(c.freq * index, t, rnd(0.005, 0.15));
+    if (Math.random() < 0.3) v.delay.delayTime.setTargetAtTime(rnd(0.0005, 0.03 + 0.05 * ch), t, 0.02);
+    if (v.pan.pan && Math.random() < 0.4) v.pan.pan.setValueAtTime(rnd(-1, 1) * ch, t);
+    // 音量：その場所にある色ほど大きく、ときどきブツ切りに途切れる
+    const gate = Math.random() < 0.25 * ch ? 0 : 1;
+    const amp = 0.16 * c.volume * (0.12 + 0.88 * Math.pow(f[i], 0.6)) * gate;
+    v.amp.gain.setTargetAtTime(amp, t, Math.random() < ch ? 0.003 : 0.08);
+  });
+
+  // 4. ピクセル・グリッチ（写真の生データをどもらせる）
+  if (Math.random() < 0.35 + 0.6 * ch) pixelGrain(g, main, ch, t);
+  if (Math.random() < 0.3 * ch) pixelGrain(g, main, ch, t + rnd(0.02, 0.12));
+
+  // 次の事件までの間隔：暴走度が高いほど短く、ときどき長い溜め
+  let next = (0.05 + (1 - ch) * 0.45) * rnd(0.3, 2);
+  if (Math.random() < 0.08) next *= 4;
+  g.timer = setTimeout(glitchEvent, next * 1000);
+}
+
+function pixelGrain(g, main, ch, t) {
+  const { fwd, rev, rowLen, n } = g.bufs;
+  const { W, h } = scanGrid;
+  // 区間の長さ：1行ぶん〜ほんの数ピクセル（暴走度が高いほど短く、ザラザラする）
+  const segLen = Math.max(6, Math.round(rowLen / Math.pow(2, Math.floor(rnd(0, 2 + 5 * ch)))));
+  const px = Math.round(g.cx * (W - 1)), py = Math.round(g.cy * (h - 1));
+  let start = Math.min(n - segLen, (py * W + px) * 3);
+  const reverse = Math.random() < 0.15 + 0.3 * ch;
+  if (reverse) start = n - start - segLen;
+
+  // 区間を1周期として、その場所の色の音の高さで鳴らす（オクターブはランダム）
+  const c = colors[main];
+  const target = c.freq * Math.pow(2, Math.floor(rnd(-2, 2 + 2 * ch)));
+  const rate = Math.min(16, Math.max(0.03, target * segLen / ctx.sampleRate));
+  const src = ctx.createBufferSource();
+  src.buffer = reverse ? rev : fwd;
+  src.loop = true;
+  src.loopStart = start / ctx.sampleRate;
+  src.loopEnd = (start + segLen) / ctx.sampleRate;
+  src.playbackRate.setValueAtTime(rate, t);
+  if (Math.random() < 0.25 * ch) src.playbackRate.exponentialRampToValueAtTime(rate * pick([0.25, 0.5, 2, 4]), t + rnd(0.05, 0.4));
+
+  const dur = Math.random() < 0.15 ? rnd(0.4, 1.2) : rnd(0.02, 0.25);
+  const env = ctx.createGain();
+  const peak = 0.22 * (0.4 + 0.6 * c.volume);
+  env.gain.setValueAtTime(0, t);
+  env.gain.linearRampToValueAtTime(peak, t + 0.002);
+  env.gain.setValueAtTime(peak, t + dur);
+  env.gain.linearRampToValueAtTime(0, t + dur + 0.006);
+  src.connect(env).connect(g.bus);
+  src.start(t, src.loopStart);
+  src.stop(t + dur + 0.02);
+  g.grains.add(src);
+  src.onended = () => g.grains.delete(src);
+}
+
+function stopGlitch() {
+  if (!glitch) return;
+  const g = glitch;
+  glitch = null;
+  clearTimeout(g.timer);
+  const now = ctx.currentTime;
+  g.out.gain.cancelScheduledValues(now);
+  g.out.gain.setValueAtTime(g.out.gain.value, now);
+  g.out.gain.setTargetAtTime(0, now, 0.05);
+  g.voices.forEach(v => v.osc.stop(now + 0.4));
+  g.grains.forEach(s => { try { s.stop(now + 0.4); } catch (e) {} });
+  setTimeout(() => g.out.disconnect(), 600);
+  $('glitchBox').style.display = 'none';
+  $('glitch').classList.remove('on');
+  $('glitch').textContent = '▶ Glitch';
+  [...$('colors').children].forEach(el => el.classList.remove('playing'));
+}
+
+$('glitch').onclick = () => (glitch ? stopGlitch() : startGlitch());
+$('chaos').oninput = e => {
+  $('chaosVal').textContent = e.target.value;
+  if (glitch) glitch.shaper.curve = driveCurve(chaosAmt());
+};
 </script>
 </body>
 </html>
