@@ -57,7 +57,11 @@
   .panel label { display: flex; align-items: center; gap: 6px; }
   .panel input[type=range] { width: 110px; }
   #colors { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; margin-top: 16px; }
-  .chip { background: var(--card); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; cursor: pointer; transition: transform .12s; }
+  .chip { background: var(--card); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; cursor: pointer; transition: transform .12s; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; touch-action: manipulation; }
+  #colors.hold .chip { touch-action: none; }   /* 押している間モードでは、指を置いてもスクロールしない */
+  .tapPanel { padding-top: 10px; border-top: 1px dashed var(--line); }
+  .tapPanel strong { color: var(--fg); font-weight: 600; }
+  .tapPanel label.off { opacity: .4; }
   .chip:hover { transform: translateY(-2px); }
   .chip.playing { outline: 3px solid var(--accent); outline-offset: 2px; }
   .swatch { height: 64px; position: relative; }
@@ -72,14 +76,6 @@
   .legend { margin-top: 24px; font-size: .85rem; color: var(--muted); }
   .legend li { margin: 2px 0; }
   .msg { color: var(--muted); font-size: .85rem; margin-top: 8px; }
-  #lab { margin-top: 32px; padding-top: 20px; border-top: 1px solid var(--line); }
-  #lab h2 { font-size: 1.1rem; margin: 0 0 4px; }
-  #labGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 8px; margin-top: 12px; }
-  .labBtn { display: flex; gap: 10px; align-items: center; text-align: left; padding: 10px 12px; }
-  .labBtn .dot { width: 22px; height: 22px; border-radius: 50%; flex: none; border: 1px solid var(--line); }
-  .labBtn b { display: block; font-size: .9rem; }
-  .labBtn small { color: var(--muted); font-size: .72rem; line-height: 1.3; display: block; }
-  .labBtn.playing { outline: 3px solid var(--accent); outline-offset: 2px; }
 </style>
 </head>
 <body>
@@ -142,13 +138,25 @@
           <option value="octave">オクターブ上げる</option>
         </select>
       </label>
-      <label>タップ音の長さ <input id="tlen" type="range" min="0.2" max="6" step="0.1" value="4"> <span id="tlenVal">4</span>秒</label>
       <label><input id="crush" type="checkbox"> ビットクラッシュ<span id="crushKind"></span></label>
       <label>ビット数 <input id="bits" type="range" min="1" max="8" step="1" value="4"> <span id="bitsVal">4</span></label>
       <label>サンプルレート <input id="rate" type="range" min="1000" max="44100" step="100" value="8000"> <span id="rateVal">8000</span>Hz</label>
     </div>
 
-    <p class="meta" style="margin:14px 0 0">色をタップすると、その色の音を重ねて鳴らせます。</p>
+    <div class="panel tapPanel">
+      <strong>パレットの演奏</strong>
+      <label>鳴らし方
+        <select id="tmode">
+          <option value="time">タップで一定時間</option>
+          <option value="hold">押している間だけ</option>
+        </select>
+      </label>
+      <label id="tlenLabel">長さ <input id="tlen" type="range" min="0.1" max="6" step="0.1" value="4"> <span id="tlenVal">4</span>秒</label>
+      <label>減衰 <input id="tdecay" type="range" min="0" max="100" step="1" value="40"> <span id="tdecayVal">40</span>%</label>
+      <label>余韻 <input id="trel" type="range" min="0.05" max="4" step="0.05" value="1"> <span id="trelVal">1</span>秒</label>
+    </div>
+
+    <p class="meta" style="margin:14px 0 0">色に触れると、その色の音を重ねて鳴らせます。複数の指で同時に押すこともできます。</p>
     <div id="colors"></div>
 
     <!-- 控えめ：ほかの鳴らし方 -->
@@ -173,21 +181,6 @@
     <li>面積 → Scan 中にかすかに残る音の大きさ、和音での存在感 ／ 感情 → 音のくせ</li>
   </ul>
 
-  <section id="lab">
-    <h2>音色の試聴</h2>
-    <p class="meta">12種類の感情の音色を、同じ高さ・同じ条件で聞き比べます（写真がなくても使えます）。
-      実際の写真では、白・黒・グレー（Clarity / Depth / Neutral）は彩度0〜20%で鳴ります。</p>
-    <div class="panel">
-      <label>高さ <input id="labPitch" type="range" min="40" max="84" step="1" value="57"> <span id="labPitchVal"></span></label>
-      <label>彩度 <input id="labSat" type="range" min="0" max="100" step="1" value="60"> <span id="labSatVal">60</span>%</label>
-      <label>明るさ <input id="labVal" type="range" min="0" max="100" step="1" value="80"> <span id="labValVal">80</span>%</label>
-      <label>長さ <input id="labLen" type="range" min="0.5" max="8" step="0.5" value="2"> <span id="labLenVal">2</span>秒</label>
-    </div>
-    <div class="row" style="margin-top:10px">
-      <button id="labAll">12種類を順番に鳴らす</button>
-    </div>
-    <div id="labGrid"></div>
-  </section>
 </main>
 
 <script>
@@ -454,7 +447,8 @@ function render() {
         <div class="bar"><i style="width:${c.s * 100}%"></i></div>
         <div class="meta">くせ：${QUIRKS[c.emotion]}</div>
       </div>`;
-    el.onclick = () => play(i, 0, +$('tlen').value);
+    el.addEventListener('pointerdown', e => tapDown(e, el, c));
+    el.addEventListener('contextmenu', e => e.preventDefault());   // 長押しでメニューが出ないように
     box.appendChild(el);
   });
 }
@@ -691,7 +685,7 @@ function buildVoice(c, t0) {
   return { out: trem, sources, attack, sustain };
 }
 
-// 色の情報（freq, s, emotion, volume）から1音鳴らす。写真の色でも、試聴パネルの仮の色でも使える
+// 色の情報（freq, s, emotion, volume）から1音鳴らす（Harmony・Random 用）
 function playColor(c, delay, dur, gainScale = 1) {
   const a = audio();
   const t0 = a.currentTime + delay + 0.02;
@@ -731,6 +725,82 @@ function fadeOut(voice) {
   g.linearRampToValueAtTime(0, now + 0.2);
   voice.sources.forEach(s => { try { s.stop(now + 0.25); } catch (e) {} });
 }
+
+/* ---------- パレットの演奏 ----------
+   長さ：音が鳴り続ける時間（押している間モードでは、指を離すまで）
+   減衰：0% なら同じ大きさで伸び、100% なら弦をはじいたようにすぐ小さくなる
+   余韻：離した後（長さが過ぎた後）に消えていくまでの時間 */
+function tapOpts() {
+  return {
+    hold: $('tmode').value === 'hold',
+    dur: +$('tlen').value,
+    decay: +$('tdecay').value / 100,
+    release: +$('trel').value
+  };
+}
+
+function startTap(c, o) {
+  const a = audio();
+  const t0 = a.currentTime + 0.005;
+  const v = buildVoice(c, t0);
+  const env = a.createGain();
+  const peak = 0.22 * c.volume;
+  const attack = Math.min(v.attack, 0.05);              // 演奏の反応を良くするため立ち上がりは短めに
+  const floor = Math.max(peak * (1 - o.decay) ** 2, peak * 0.002);
+  const fall = 0.04 + (1 - o.decay) * 1.5;               // 減衰が強いほど速く小さくなる
+  env.gain.setValueAtTime(0, t0);
+  env.gain.linearRampToValueAtTime(peak, t0 + attack);
+  env.gain.setTargetAtTime(floor, t0 + attack, fall);
+  v.out.connect(env).connect(master);
+  const voice = { env, sources: v.sources, release: o.release };
+  if (!o.hold) {
+    const rel = t0 + Math.max(o.dur, attack + 0.01);
+    env.gain.setTargetAtTime(0, rel, o.release / 4);
+    v.sources.forEach(s => s.stop(rel + o.release + 0.1));
+  }
+  return voice;
+}
+
+function releaseTap(voice) {
+  const now = ctx.currentTime;
+  const g = voice.env.gain;
+  if (g.cancelAndHoldAtTime) g.cancelAndHoldAtTime(now);
+  else { g.cancelScheduledValues(now); g.setValueAtTime(g.value, now); }
+  g.setTargetAtTime(0, now, voice.release / 4);
+  voice.sources.forEach(s => { try { s.stop(now + voice.release + 0.1); } catch (e) {} });
+}
+
+function tapDown(e, el, c) {
+  e.preventDefault();
+  const o = tapOpts();
+  const voice = startTap(c, o);
+  el.classList.add('playing');
+  if (o.hold) {
+    try { el.setPointerCapture(e.pointerId); } catch (err) {}
+    const up = ev => {
+      if (ev.pointerId !== e.pointerId) return;
+      releaseTap(voice);
+      el.classList.remove('playing');
+      el.removeEventListener('pointerup', up);
+      el.removeEventListener('pointercancel', up);
+    };
+    el.addEventListener('pointerup', up);
+    el.addEventListener('pointercancel', up);
+  } else {
+    setTimeout(() => el.classList.remove('playing'), (o.dur + o.release * 0.5) * 1000);
+  }
+}
+
+function syncTapMode() {
+  const hold = $('tmode').value === 'hold';
+  $('colors').classList.toggle('hold', hold);
+  $('tlenLabel').classList.toggle('off', hold);
+  $('tlen').disabled = hold;
+}
+$('tmode').onchange = syncTapMode;
+$('tdecay').oninput = e => { $('tdecayVal').textContent = e.target.value; };
+$('trel').oninput = e => { $('trelVal').textContent = e.target.value; };
+syncTapMode();
 
 /* ---------- 鳴らし方 ---------- */
 let harmonyVoices = [], harmonyTimer = null;
@@ -884,68 +954,6 @@ $('collide').onchange = () => {
   render();
 };
 
-/* ---------- 音色の試聴パネル ---------- */
-const LAB = [
-  ['Clarity', '#f4f1ea'], ['Depth', '#151515'], ['Neutral', '#8a8a8a'],
-  ['Passion', '#e03131'], ['Warmth', '#f08c00'], ['Joy', '#e8e000'],
-  ['Freshness', '#6cc04a'], ['Peace', '#2f9e44'], ['Calm', '#1aa3a3'],
-  ['Melancholy', '#1c4fa8'], ['Mystery', '#7b2cbf'], ['Creativity', '#d63384']
-];
-
-function labColor(emotion) {
-  return {
-    emotion,
-    freq: midiToFreq(+$('labPitch').value),
-    s: +$('labSat').value / 100,
-    volume: 0.15 + 0.85 * (+$('labVal').value / 100)
-  };
-}
-
-function labPlay(k) {
-  const dur = +$('labLen').value;
-  const voice = playColor(labColor(LAB[k][0]), 0, dur);
-  const btn = $('labGrid').children[k];
-  btn.classList.add('playing');
-  setTimeout(() => btn.classList.remove('playing'), dur * 1000);
-  return voice;
-}
-
-LAB.forEach(([emo, hex], k) => {
-  const b = document.createElement('button');
-  b.className = 'labBtn';
-  b.innerHTML = `<span class="dot" style="background:${hex}"></span><span><b>${emo}</b><small>${QUIRKS[emo]}</small></span>`;
-  b.onclick = () => labPlay(k);
-  $('labGrid').appendChild(b);
-});
-
-let labSeq = null;
-function stopLabSeq() {
-  if (!labSeq) return;
-  labSeq.timers.forEach(clearTimeout);
-  labSeq.voices.forEach(fadeOut);
-  labSeq = null;
-  $('labAll').classList.remove('on');
-  $('labAll').textContent = '12種類を順番に鳴らす';
-  [...$('labGrid').children].forEach(b => b.classList.remove('playing'));
-}
-$('labAll').onclick = () => {
-  if (labSeq) { stopLabSeq(); return; }
-  const gap = (+$('labLen').value + 0.3) * 1000;
-  labSeq = { timers: [], voices: [] };
-  LAB.forEach((_, k) => labSeq.timers.push(setTimeout(() => { if (labSeq) labSeq.voices.push(labPlay(k)); }, k * gap)));
-  labSeq.timers.push(setTimeout(stopLabSeq, LAB.length * gap));
-  $('labAll').classList.add('on');
-  $('labAll').textContent = '止める';
-};
-
-const labLabels = () => {
-  $('labPitchVal').textContent = midiName(+$('labPitch').value);
-  $('labSatVal').textContent = $('labSat').value;
-  $('labValVal').textContent = $('labVal').value;
-  $('labLenVal').textContent = $('labLen').value;
-};
-['labPitch', 'labSat', 'labVal', 'labLen'].forEach(id => { $(id).oninput = labLabels; });
-labLabels();
 $('sweep').oninput = e => { $('sweepVal').textContent = e.target.value; };
 </script>
 </body>
