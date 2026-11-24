@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ja">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -93,33 +93,43 @@
   .legend { margin-top: 24px; font-size: .85rem; color: var(--muted); }
   .legend li { margin: 2px 0; }
   .msg { color: var(--muted); font-size: .85rem; margin-top: 8px; }
+  a { color: var(--accent); }
+  .byline { margin: 0 0 6px; font-size: .85rem; color: var(--muted); }
+  .series { margin-top: 32px; padding: 18px 18px 20px; background: var(--card); border: 1px solid var(--line); border-radius: 12px; }
+  .series h2 { margin: 0 0 6px; font-size: 1.05rem; }
+  .series p { margin: 0 0 8px; font-size: .9rem; color: var(--muted); }
+  .series ul { margin: 0 0 14px; padding-left: 20px; font-size: .9rem; }
+  .series li { margin: 3px 0; }
+  a.seriesLink { display: inline-block; padding: 10px 18px; border-radius: 10px; background: var(--accent); color: #fff; text-decoration: none; font-size: .95rem; }
+  .foot { margin-top: 28px; padding-top: 14px; border-top: 1px solid var(--line); font-size: .8rem; color: var(--muted); }
 </style>
 </head>
 <body>
 <main>
   <h1>Color Sound Generator Version 10</h1>
   <p class="lead">An improved version of the app used in the 2023 solo exhibition <i>The Color Cleanser</i>.</p>
-  <p class="sub">写真を読み込んで再生すると、光の帯が写真の上をゆっくり通り過ぎ、帯の中にある色が音になって響きます。写真の構図そのものが楽譜になります。写真に触れたりなぞったりして、音を重ねることもできます。</p>
+  <p class="byline">by <a href="https://www.mehatasentimentallegend.com/" target="_blank" rel="noopener">Hiroshi Mehata</a> · Experimental Music / Contemporary Art</p>
+  <p class="sub">Load a photo and press Play: a band of light slowly sweeps across it, and the colors inside the band ring out as sound. The composition of the photo becomes the score. Touch or trace the photo to layer sounds on top.</p>
 
   <div class="row">
-    <label class="btn" for="file">写真を選ぶ</label>
+    <label class="btn" for="file">Choose a photo</label>
     <input id="file" type="file" accept="image/*">
-    <label class="btn" for="snap">スマホで撮影</label>
+    <label class="btn" for="snap">Take a photo (phone)</label>
     <input id="snap" type="file" accept="image/*" capture="environment">
-    <button id="camBtn">カメラを起動</button>
+    <button id="camBtn">Open camera</button>
   </div>
   <div class="msg" id="msg"></div>
 
   <div id="camera">
     <video id="video" autoplay playsinline muted></video>
     <div class="row" style="margin-top:8px">
-      <button id="shoot" class="primary">撮影する</button>
-      <button id="camClose">閉じる</button>
+      <button id="shoot" class="primary">Capture</button>
+      <button id="camClose">Close</button>
     </div>
   </div>
 
   <div id="stage">
-    <img id="preview" alt="選んだ写真" draggable="false">
+    <img id="preview" alt="Selected photo" draggable="false">
     <div id="scanLine"></div>
     <div id="glitchBox"></div>
   </div>
@@ -127,16 +137,16 @@
   <div id="result">
     <!-- メイン：Scan -->
     <div class="scanbox">
-      <button id="scan" class="play">▶ 再生</button>
+      <button id="scan" class="play">▶ Play</button>
       <div class="scanopts">
-        <label>向き
+        <label>Direction
           <select id="scanDir">
-            <option value="x">横スキャン（左右に動く）</option>
-            <option value="y">縦スキャン（上下に動く）</option>
+            <option value="x">Horizontal (band moves left–right)</option>
+            <option value="y">Vertical (band moves up–down)</option>
           </select>
         </label>
-        <label>速さ（端から端まで） <input id="sweep" type="range" min="6" max="60" step="1" value="20"> <span id="sweepVal">20</span>秒</label>
-        <label>残響 <input id="reverb" type="range" min="0" max="100" step="1" value="45"> <span id="reverbVal">45</span>%</label>
+        <label>Speed (edge to edge) <input id="sweep" type="range" min="6" max="60" step="1" value="20"> <span id="sweepVal">20</span>s</label>
+        <label>Reverb <input id="reverb" type="range" min="0" max="100" step="1" value="45"> <span id="reverbVal">45</span>%</label>
       </div>
     </div>
 
@@ -149,68 +159,85 @@
     </div>
 
     <div class="panel">
-      <label>音量 <input id="vol" type="range" min="0" max="1" step="0.01" value="0.7"></label>
-      <label>音の被り
+      <label>Volume <input id="vol" type="range" min="0" max="1" step="0.01" value="0.7"></label>
+      <label>Same-pitch colors
         <select id="collide">
-          <option value="none">そのまま</option>
-          <option value="shift">隣の音へずらす</option>
-          <option value="octave">オクターブ上げる</option>
+          <option value="none">Leave as is</option>
+          <option value="shift">Shift to the next note</option>
+          <option value="octave">Raise an octave</option>
         </select>
       </label>
-      <label><input id="crush" type="checkbox"> ビットクラッシュ<span id="crushKind"></span></label>
-      <label>ビット数 <input id="bits" type="range" min="1" max="8" step="1" value="4"> <span id="bitsVal">4</span></label>
-      <label>サンプルレート <input id="rate" type="range" min="1000" max="44100" step="100" value="8000"> <span id="rateVal">8000</span>Hz</label>
+      <label><input id="crush" type="checkbox"> Bitcrush<span id="crushKind"></span></label>
+      <label>Bits <input id="bits" type="range" min="1" max="8" step="1" value="4"> <span id="bitsVal">4</span></label>
+      <label>Sample rate <input id="rate" type="range" min="1000" max="44100" step="100" value="8000"> <span id="rateVal">8000</span>Hz</label>
     </div>
 
     <div class="panel tapPanel">
-      <strong>写真に触れて演奏</strong>
-      <label>鳴らし方
+      <strong>Play by touching the photo</strong>
+      <label>Trigger
         <select id="tmode">
-          <option value="time">タップで一定時間</option>
-          <option value="hold">押している間だけ</option>
+          <option value="time">Tap: fixed length</option>
+          <option value="hold">Hold: while pressed</option>
         </select>
       </label>
-      <label>音の加工
+      <label>Effect
         <select id="tfx">
-          <option value="auto">おまかせ（毎回変わる）</option>
-          <option value="reverse">リバース</option>
-          <option value="stutter">ループ（どもり）</option>
-          <option value="shimmer">オクターブ上のきらめき</option>
-          <option value="tape">テープが止まる</option>
-          <option value="none">加工なし（そのままの音）</option>
+          <option value="auto">Random (changes every touch)</option>
+          <option value="reverse">Reverse</option>
+          <option value="stutter">Stutter loop</option>
+          <option value="shimmer">Octave shimmer</option>
+          <option value="tape">Tape stop</option>
+          <option value="none">None (dry tone)</option>
         </select>
       </label>
-      <label>音量 <input id="tmix" type="range" min="0" max="200" step="5" value="100"> <span id="tmixVal">100</span>%</label>
-      <label id="tlenLabel">長さ <input id="tlen" type="range" min="0.1" max="6" step="0.1" value="4"> <span id="tlenVal">4</span>秒</label>
-      <label>減衰 <input id="tdecay" type="range" min="0" max="100" step="1" value="40"> <span id="tdecayVal">40</span>%</label>
-      <label>余韻 <input id="trel" type="range" min="0.05" max="4" step="0.05" value="1"> <span id="trelVal">1</span>秒</label>
+      <label>Volume <input id="tmix" type="range" min="0" max="200" step="5" value="100"> <span id="tmixVal">100</span>%</label>
+      <label id="tlenLabel">Length <input id="tlen" type="range" min="0.1" max="6" step="0.1" value="4"> <span id="tlenVal">4</span>s</label>
+      <label>Decay <input id="tdecay" type="range" min="0" max="100" step="1" value="40"> <span id="tdecayVal">40</span>%</label>
+      <label>Release <input id="trel" type="range" min="0.05" max="4" step="0.05" value="1"> <span id="trelVal">1</span>s</label>
     </div>
 
-    <p class="meta" style="margin:14px 0 0">写真に触れたりなぞったりすると、触れた色の音を加工したアクセントが Scan に薄く重なります。Scan を止めていても鳴り、複数の指でも演奏できます。</p>
+    <p class="meta" style="margin:14px 0 0">Touch or trace the photo to add a processed accent of the color under your finger, layered softly over Scan. It works with Scan stopped too, and with several fingers at once.</p>
     <details class="palette">
-      <summary>写真の色の一覧（それぞれの色の音の情報）</summary>
+      <summary>Colors in this photo (and how each one sounds)</summary>
       <div id="colors"></div>
     </details>
 
     <!-- もう一つの顔：Glitch -->
     <section class="glitch">
       <h2>GLITCH</h2>
-      <p>写真をデータとして壊しながら読むモードです。ピクセルの並びをそのまま波形として鳴らし、色どうしが互いの音の高さを狂わせ合います。読む場所は写真の上をランダムに飛び回り、どもり、逆走し、突然黙ります。</p>
+      <p>Reads the photo as raw data and breaks it. Rows of pixels are played directly as waveforms, and the colors detune each other in a feedback loop. The read head jumps around the photo at random, stutters, runs backwards and suddenly falls silent.</p>
       <div class="row">
         <button id="glitch" class="gbtn">▶ Glitch</button>
-        <label>暴走度 <input id="chaos" type="range" min="0" max="100" step="1" value="50"> <span id="chaosVal">50</span>%</label>
+        <label>Chaos <input id="chaos" type="range" min="0" max="100" step="1" value="50"> <span id="chaosVal">50</span>%</label>
       </div>
     </section>
   </div>
 
   <ul class="legend">
-    <li>Scan：全部の色を鳴らし続け、写真の上を動く帯の中にある色ほど大きく聞こえます。写真の構図がそのまま楽譜になります</li>
-    <li>いちばん強い色（面積 × 彩度）の感情で、写真全体のスケールと主音が決まります</li>
-    <li>色相 → そのスケールの中での音の位置（2オクターブ）。無彩色は明るさで位置を決めます</li>
-    <li>明るさ → 音量（とても暗い色は1オクターブ下）／ 彩度 → 音色（やわらかい ↔ 鋭い）</li>
-    <li>面積 → Scan 中にかすかに残る音の大きさ ／ 感情 → 音のくせ</li>
-    <li>Glitch：ピクセルの R・G・B の値をそのまま波形にし、彩度の高い色ほど他の色を強く狂わせます</li>
+    <li>Scan: every color plays continuously, and colors inside the moving band are louder. The composition of the photo is the score</li>
+    <li>The strongest color (area × saturation) sets an emotion, which picks the scale and key for the whole photo</li>
+    <li>Hue → position in that scale (over 2 octaves). Gray tones use brightness instead</li>
+    <li>Brightness → volume (very dark colors drop an octave) / Saturation → timbre (soft ↔ sharp)</li>
+    <li>Area → how much of each color lingers during Scan / Emotion → a sonic character for each color</li>
+    <li>Glitch: raw R, G, B pixel values become waveforms, and more saturated colors disturb the others more strongly</li>
   </ul>
+
+  <!-- シリーズのほかの楽器と、ウェブサイトへの導線 -->
+  <section class="series">
+    <h2>The Color Sound series</h2>
+    <p>Version 10 reads a single photo as a score. Its sibling instruments play whatever your camera sees, live:</p>
+    <ul>
+      <li><strong>Gazer</strong> — every cell's color becomes a roaring, distorted wall of sound</li>
+      <li><strong>Hazer</strong> — colors drift into slow ambient sound, with optional Satie-style piano</li>
+      <li><strong>Scanner</strong> — a scan bar sweeps across the screen and plays the colors it passes</li>
+    </ul>
+    <a class="seriesLink" href="https://hsentimentallegend.github.io/color-sound-scanner/" target="_blank" rel="noopener">Open the live camera instruments →</a>
+  </section>
+
+  <footer class="foot">
+    Hiroshi Mehata — Experimental Music / Contemporary Art ·
+    <a href="https://www.mehatasentimentallegend.com/" target="_blank" rel="noopener">mehatasentimentallegend.com</a>
+  </footer>
 
 </main>
 
@@ -218,25 +245,25 @@
 const NUM_COLORS = 8;
 const NOTE_NAMES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
 const SCALES = {
-  major:            { steps: [0, 2, 4, 5, 7, 9, 11], ja: 'メジャー' },
-  minor:            { steps: [0, 2, 3, 5, 7, 8, 10], ja: 'マイナー' },
-  pentatonic_major: { steps: [0, 2, 4, 7, 9],        ja: 'メジャー・ペンタトニック' },
-  pentatonic_minor: { steps: [0, 3, 5, 7, 10],       ja: 'マイナー・ペンタトニック' },
-  blues:            { steps: [0, 3, 5, 6, 7, 10],    ja: 'ブルース' }
+  major:            { steps: [0, 2, 4, 5, 7, 9, 11], ja: 'major' },
+  minor:            { steps: [0, 2, 3, 5, 7, 8, 10], ja: 'minor' },
+  pentatonic_major: { steps: [0, 2, 4, 7, 9],        ja: 'major pentatonic' },
+  pentatonic_minor: { steps: [0, 3, 5, 7, 10],       ja: 'minor pentatonic' },
+  blues:            { steps: [0, 3, 5, 6, 7, 10],    ja: 'blues' }
 };
 const QUIRKS = {
-  Clarity:    'きらめく倍音',
-  Depth:      '低いノイズの響き',
-  Neutral:    'くせなし',
-  Passion:    '熱い歪み',
-  Warmth:     '厚みのあるコーラス',
-  Joy:        '明るく速い揺らぎ',
-  Freshness:  'はじけるアタック',
-  Peace:      'おだやかな音量の揺れ',
-  Calm:       'ゆったりした立ち上がりと揺れ',
-  Melancholy: '憂いのあるビブラート',
-  Mystery:    '深くゆっくりうねる',
-  Creativity: '金属的なFMの響き'
+  Clarity:    'sparkling overtones',
+  Depth:      'low noise rumble',
+  Neutral:    'plain',
+  Passion:    'hot distortion',
+  Warmth:     'thick chorus',
+  Joy:        'bright, fast wobble',
+  Freshness:  'popping attack',
+  Peace:      'gentle tremolo',
+  Calm:       'slow swell and sway',
+  Melancholy: 'wistful vibrato',
+  Mystery:    'deep, slow undulation',
+  Creativity: 'metallic FM ring'
 };
 
 const $ = id => document.getElementById(id);
@@ -274,7 +301,7 @@ $('camBtn').onclick = async () => {
     $('video').srcObject = stream;
     $('camera').style.display = 'block';
   } catch (err) {
-    $('msg').textContent = 'カメラを起動できませんでした（' + err.name + '）。「写真を選ぶ」か「スマホで撮影」を使ってください。';
+    $('msg').textContent = 'Could not open the camera (' + err.name + '). Please use "Choose a photo" or "Take a photo (phone)" instead.';
   }
 };
 function stopCamera() {
@@ -435,13 +462,13 @@ function assignNotes() {
         const k = c.idx + dir * (d % 2 ? Math.ceil(d / 2) : -d / 2);
         if (k < 0 || k >= range) continue;
         const m = midiOf(k, c.oct);
-        if (!used.has(m)) { midi = m; c.moved = '→ずらし'; break; }
+        if (!used.has(m)) { midi = m; c.moved = '→ shifted'; break; }
       }
     }
     if ((mode === 'octave' || mode === 'shift') && used.has(midi)) {
       let n = 0;
       while (used.has(midi) && n < 3) { midi += 12; n++; }
-      c.moved = n === 1 ? '↑1オクターブ' : `↑${n}オクターブ`;
+      c.moved = n === 1 ? '↑ 1 octave' : `↑ ${n} octaves`;
     }
     used.set(midi, c);
     c.midi = midi;
@@ -456,8 +483,8 @@ const hexOf = rgb => '#' + rgb.map(x => x.toString(16).padStart(2, '0')).join(''
 function render() {
   const { dom, rootMidi, scale } = keyInfo;
   $('keyDot').style.background = hexOf(dom.rgb);
-  $('keyTitle').textContent = `この写真は ${dom.emotion}（${NOTE_NAMES[rootMidi % 12]} ${SCALES[scale].ja}）`;
-  $('keySub').textContent = `基準の色 ${hexOf(dom.rgb)} ・ 面積 ${Math.round(dom.share * 100)}% ・ 彩度 ${Math.round(dom.s * 100)}%`;
+  $('keyTitle').textContent = `This photo is ${dom.emotion} (${NOTE_NAMES[rootMidi % 12]} ${SCALES[scale].ja})`;
+  $('keySub').textContent = `Key color ${hexOf(dom.rgb)} · area ${Math.round(dom.share * 100)}% · saturation ${Math.round(dom.s * 100)}%`;
 
   const box = $('colors');
   box.innerHTML = '';
@@ -465,17 +492,17 @@ function render() {
     const el = document.createElement('div');
     el.className = 'chip';
     el.innerHTML = `
-      <div class="swatch" style="background:${hexOf(c.rgb)}">${c.isDominant ? '<span class="badge">基準</span>' : ''}</div>
+      <div class="swatch" style="background:${hexOf(c.rgb)}">${c.isDominant ? '<span class="badge">key</span>' : ''}</div>
       <div class="info">
         <div class="emo">${c.emotion}</div>
         <div class="note">${c.note} <span class="meta">${Math.round(c.freq)} Hz</span></div>
-        ${c.moved ? `<div class="moved">${c.moved}（元は ${midiName(c.origMidi)}）</div>` : ''}
-        <div class="meta">${hexOf(c.rgb)} ・ 面積 ${Math.round(c.share * 100)}%</div>
-        <div class="meta">音量（明るさ ${Math.round(c.v * 100)}%）</div>
+        ${c.moved ? `<div class="moved">${c.moved} (was ${midiName(c.origMidi)})</div>` : ''}
+        <div class="meta">${hexOf(c.rgb)} · area ${Math.round(c.share * 100)}%</div>
+        <div class="meta">Volume (brightness ${Math.round(c.v * 100)}%)</div>
         <div class="bar"><i style="width:${c.volume * 100}%"></i></div>
-        <div class="meta">鋭さ（彩度 ${Math.round(c.s * 100)}%）</div>
+        <div class="meta">Sharpness (saturation ${Math.round(c.s * 100)}%)</div>
         <div class="bar"><i style="width:${c.s * 100}%"></i></div>
-        <div class="meta">くせ：${QUIRKS[c.emotion]}</div>
+        <div class="meta">Character: ${QUIRKS[c.emotion]}</div>
       </div>`;
     el.addEventListener('pointerdown', e => tapDown(e, el, c));
     el.addEventListener('contextmenu', e => e.preventDefault());   // 長押しでメニューが出ないように
@@ -554,7 +581,7 @@ async function loadCrusher() {
     sendCrush();
     route();
   } catch (err) {
-    console.warn('AudioWorklet を使えないので互換モードにします', err);
+    console.warn('AudioWorklet unavailable, using compatibility mode', err);
   }
   showCrusherKind();
 }
@@ -592,7 +619,7 @@ function route() {
 }
 
 function showCrusherKind() {
-  $('crushKind').textContent = crusherKind === 'worklet' ? '' : crusherKind === 'script' ? '（互換モード）' : '';
+  $('crushKind').textContent = crusherKind === 'worklet' ? '' : crusherKind === 'script' ? ' (compatibility mode)' : '';
 }
 
 $('vol').oninput = e => { if (master) master.gain.value = +e.target.value; };
@@ -1074,7 +1101,7 @@ function startScan() {
   setReverb(0);
   $('scanLine').style.display = 'block';
   $('scan').classList.add('on');
-  $('scan').textContent = '■ 停止';
+  $('scan').textContent = '■ Stop';
 
   const loop = now => {
     if (!scan) return;
@@ -1122,7 +1149,7 @@ function stopScan() {
   scan = null;
   $('scanLine').style.display = 'none';
   $('scan').classList.remove('on');
-  $('scan').textContent = '▶ 再生';
+  $('scan').textContent = '▶ Play';
   [...$('colors').children].forEach(ch => ch.classList.remove('playing'));
 }
 
@@ -1234,7 +1261,7 @@ function startGlitch() {
   };
   $('glitchBox').style.display = 'block';
   $('glitch').classList.add('on');
-  $('glitch').textContent = '■ 停止';
+  $('glitch').textContent = '■ Stop';
   glitchEvent();
 }
 

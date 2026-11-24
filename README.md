@@ -2,94 +2,108 @@
 
 An improved version of the app used in the 2023 solo exhibition *The Color Cleanser*.
 
-写真を「読む」ように演奏するWebアプリです。写真を読み込んで再生すると、光の帯が写真の上をゆっくり通り過ぎ、帯の中にある色が音になって響きます。写真の構図そのものが楽譜になり、同じ写真なら毎回同じ流れで、構図が違えばまったく違う音楽になります。
+A web instrument that plays a photo as if reading it. Load a photo and press Play: a band of light slowly sweeps across it, and the colors inside the band ring out as sound. The composition of the photo becomes the score — the same photo always unfolds the same way, and a different composition makes entirely different music.
 
-**デモ：** https://hsentimentallegend.github.io/Color_Sound_Generator_10/
+**Live:** https://hsentimentallegend.github.io/Color_Sound_Generator_10/
 
-HTMLファイル1つで動きます。外部ライブラリは使わず、音はすべてブラウザの Web Audio API で、その場で合成しています。
+It runs from a single HTML file. No external libraries: every sound is synthesized on the spot with the browser's Web Audio API.
 
----
-
-## 使い方
-
-1. 「写真を選ぶ」「スマホで撮影」「カメラを起動」のどれかで写真を読み込みます
-2. **▶ 再生** を押すと Scan が始まります
-   - 写真から取り出した色（最大8色）がすべて鳴り続け、帯の中に多く入っている色ほど大きく聞こえます
-   - **向き**：横スキャン（帯が左右に動く）／縦スキャン（帯が上下に動く）。横縞の写真は縦スキャン、縦縞の写真は横スキャンで変化がはっきり出ます
-   - **速さ**：帯が端から端まで動く時間（6〜60秒）
-   - **残響**：ホールのような響きの量（0〜100%）。上げるほど元の音が少し奥に下がり、響きが広がります
-3. 写真そのものが楽器になります。写真に触れたりなぞったりすると、触れた場所の色の音を加工したアクセントが Scan の後ろに薄く重なります。Scan を止めていても鳴り、複数の指でも演奏できます
-   - なぞると、別の色に入るたびに短い音の粒が鳴ります。速くなぞるほど粒は短くなり、触れた場所の左右で音の左右の位置が決まります
-   - **音の加工**：リバース／ループ（どもり）／オクターブ上のきらめき／テープが止まる／おまかせ（毎回変わる）／加工なし
-   - **音量**：触れた時の音の大きさ（0〜200%）。全体の音量とは別に調整できます
-   - **鳴らし方**：タップで一定時間鳴らす／押している間だけ鳴らす
-   - **長さ**（0.1〜6秒）・**減衰**（0%＝伸びる音〜100%＝はじく音）・**余韻**（離した後に消えるまでの時間）を調整できます
-4. 音量・音の被り（同じ高さになった色を「隣の音へずらす／オクターブ上げる」）・ビットクラッシュは鳴らしながら調整できます
-5. **Glitch** は Scan と正反対の、攻撃的で予測できないモードです
-   - 写真をデータとして壊しながら読みます。読む場所が写真の上をワープし、どもり、逆走し、突然黙ります
-   - **暴走度**（0〜100%）で、かすかなグリッチから完全なカオスまで変えられます
-
-> iPhone では消音モードだと音が出ないことがあります。カメラは https のページでのみ使えます。
+Part of the **Color Sound series** by [Hiroshi Mehata](https://www.mehatasentimentallegend.com/) (Experimental Music / Contemporary Art).
 
 ---
 
-## 色と音の対応ルール
+## How to play
 
-音は2つの層で決まります。
+1. Load a photo with **Choose a photo**, **Take a photo (phone)** or **Open camera**
+2. Press **▶ Play** to start Scan
+   - Every color extracted from the photo (up to 8) keeps sounding; the more of a color sits inside the band, the louder it gets
+   - **Direction**: horizontal (band moves left–right) or vertical (band moves up–down). Horizontally striped photos change most with a vertical scan, and vice versa
+   - **Speed**: how long the band takes to travel edge to edge (6–60 s)
+   - **Reverb**: amount of hall-like reverberation (0–100%). Higher values push the dry sound back and widen the space
+3. The photo itself is an instrument. Touch or trace it, and a processed accent of the color under your finger is layered softly behind Scan. It works with Scan stopped, and with several fingers at once
+   - Tracing fires a short grain each time you cross into another color. Faster strokes make shorter grains, and the left–right position of your finger sets the stereo position
+   - **Effect**: Reverse / Stutter loop / Octave shimmer / Tape stop / Random (changes every touch) / None
+   - **Volume**: loudness of the touch sounds (0–200%), separate from the master volume
+   - **Trigger**: tap for a fixed length, or hold to sound while pressed
+   - **Length** (0.1–6 s), **Decay** (0% = sustained, 100% = plucked) and **Release** (fade-out after letting go)
+4. Master volume, **Same-pitch colors** (shift colors that land on the same note to the next note, or raise them an octave) and **Bitcrush** can all be adjusted while playing
+5. **Glitch** is the opposite of Scan: an aggressive, unpredictable mode
+   - It reads the photo as raw data and breaks it. The read head warps around the photo, stutters, runs backwards and suddenly falls silent
+   - **Chaos** (0–100%) goes from a faint glitch to total mayhem
 
-### 層1：写真全体の「調」
-「面積 × 彩度」がいちばん強い色を基準にし、その色の**感情**から写真全体のスケールと主音を決めます。
+> On iPhone, no sound may play while the silent switch is on. The camera only works on https pages.
 
-| 色 | 感情 | スケール |
+---
+
+## How colors become sound
+
+Sound is decided in two layers.
+
+### Layer 1: the key of the whole photo
+The color with the strongest *area × saturation* becomes the key color. Its **emotion** sets the scale and root note for the whole photo.
+
+| Color | Emotion | Scale |
 |---|---|---|
-| 白 | Clarity | メジャー |
-| 黒 | Depth | マイナー |
-| グレー | Neutral | ペンタトニック（明るさで長／短） |
-| 赤 | Passion | メジャー／ブルース |
-| オレンジ | Warmth | メジャー |
-| 黄 | Joy | メジャー・ペンタトニック |
-| 黄緑 | Freshness | メジャー |
-| 緑 | Peace | ペンタトニック |
-| 青緑 | Calm | メジャー／マイナー |
-| 青 | Melancholy | マイナー |
-| 紫 | Mystery | ブルース |
-| マゼンタ | Creativity | メジャー／マイナー |
+| White | Clarity | Major |
+| Black | Depth | Minor |
+| Gray | Neutral | Pentatonic (major or minor by brightness) |
+| Red | Passion | Major / Blues |
+| Orange | Warmth | Major |
+| Yellow | Joy | Major pentatonic |
+| Yellow-green | Freshness | Major |
+| Green | Peace | Pentatonic |
+| Teal | Calm | Major / Minor |
+| Blue | Melancholy | Minor |
+| Purple | Mystery | Blues |
+| Magenta | Creativity | Major / Minor |
 
-### 層2：色ごとの音
-| 色の要素 | 音 |
+### Layer 2: each color's sound
+| Color property | Sound |
 |---|---|
-| 色相 | 層1のスケールの中での音の位置（2オクターブ）。全色が同じスケールに入るので濁らない |
-| 明るさ | 音量（とても暗い色は1オクターブ下） |
-| 彩度 | 音色。サイン → 三角 → ノコギリ → 矩形 と連続的に鋭くなり、フィルターも開く |
-| 帯の中の色の割合 | Scan での音量（帯の外の色も、面積に応じてかすかに鳴り続ける） |
-| 面積 | Scan 中にかすかに残る音の大きさ |
-| 感情 | 音の「くせ」（歪み、ビブラート、トレモロ、ノイズ、倍音、FMなど） |
+| Hue | Position within the Layer 1 scale (over 2 octaves). Every color falls in the same scale, so nothing clashes |
+| Brightness | Volume (very dark colors drop an octave) |
+| Saturation | Timbre: sine → triangle → sawtooth → square, getting sharper continuously as the filter opens |
+| Share of the color inside the band | Volume during Scan (colors outside the band keep sounding faintly, by area) |
+| Area | How much of the color lingers during Scan |
+| Emotion | A sonic character (distortion, vibrato, tremolo, noise, overtones, FM, …) |
 
 ---
 
-## 技術的なポイント
+## Technical notes
 
-- **色の抽出**：画像を縮小し、k-means（k-means++ 初期化・固定シード）で最大8色に分類。同じ写真なら毎回同じ結果になる
-- **音の合成**：Web Audio API のオシレーター、フィルター、WaveShaper、LFO で1色ごとに音を組み立てる
-- **Scan**：各ピクセルがどの色に属するかの地図を持ち、帯の中の色の割合で各音の音量をなめらかに追従させる。色ごとに周期の違うゆっくりした揺らぎを加えている。残響はノイズを減衰させた響きの素（インパルス応答）をその場で作り、ConvolverNode で掛けている
-- **写真に触れた時のアクセント音**：写真を読み込んだ時に、色ごとの音を OfflineAudioContext で裏で書き出しておき、触れた時はその素材を逆再生・短いループ・ピッチ変更して、こだまを付けて奥に置く
-- **Glitch**：2つの音源を確率的に暴れさせる
-  - ピクセル・グリッチ：写真の R・G・B の値をそのまま並べて波形にし、短い区間をループ・逆再生する。写真の質感がそのまま音色になる
-  - カオス・ネットワーク：色ごとの発振器を輪につなぎ、隣の色の音で音の高さを揺さぶる（相互FM）。輪に短いディレイを挟んで音を自分に戻すので、状態が予測できない方向へ崩れる。彩度の高い色ほど相手を強く狂わせる
-  - 最後に強いリミッターを通し、急な大音量を防いでいる
-- **ビットクラッシュ**：AudioWorklet（音専用スレッド）で処理し、画面の描画が重くても音が途切れないようにしている。オフの時は経路から外す
-
----
-
-## 経緯
-
-もともとは Python + Streamlit で作った「Color Sound Generator V3」（Color Cleanser Exhibition の拡張アプリ）でした。V3 の「色 → 感情 → スケール」という考え方を引き継ぎつつ、次の点を変えて Web 版として作り直しました。
-
-- 支配的な1色だけでなく、**すべての色をそれぞれ1つの音として**鳴らし、どの色がどの音か分かるようにした
-- 10秒のWAVを生成する方式から、**ブラウザでリアルタイムに合成**する方式にした
-- 写真の構図そのものを楽譜として読む **Scan** を演奏の中心にした
-- その対極として、写真をデータとして壊しながら読む **Glitch** を加えた
+- **Color extraction**: the image is downscaled and clustered into up to 8 colors with k-means (k-means++ initialization, fixed seed), so the same photo always gives the same result
+- **Synthesis**: each color is built from Web Audio oscillators, filters, a WaveShaper and LFOs
+- **Scan**: a per-pixel map of which color each pixel belongs to; each voice's volume smoothly follows that color's share inside the band, with a slow drift of a different period per color. The reverb uses an impulse response generated on the fly (decaying noise that darkens over time) through a ConvolverNode
+- **Touch accents**: when a photo loads, each color's tone is pre-rendered in the background with an OfflineAudioContext. Touches play that material reversed, looped or pitch-shifted, sent into an echo to sit behind Scan
+- **Glitch**: two sources driven by chance
+  - Pixel glitch: the photo's raw R, G, B values are laid out as a waveform, and short segments are looped and reversed — the texture of the photo becomes the timbre
+  - Chaos network: one oscillator per color, wired in a ring so each one frequency-modulates the next (cross-FM). A short delay inside the ring feeds the sound back into itself, so the state collapses in unpredictable directions. More saturated colors disturb their neighbors more strongly
+  - A hard limiter at the end guards against sudden loud peaks
+- **Bitcrush**: processed in an AudioWorklet (a dedicated audio thread) so heavy drawing never interrupts the sound, and bypassed entirely when off
 
 ---
 
-Created by Hiroshi Mehata — Extension app for Color Cleanser Exhibition
+## Background
+
+This began as *Color Sound Generator V3*, built with Python + Streamlit as an extension app for the Color Cleanser exhibition. Version 10 keeps V3's idea of *color → emotion → scale* and rebuilds it for the web:
+
+- **Every color is its own voice**, not just the single dominant color, so you can hear which color is which
+- Instead of rendering a 10-second WAV, sound is **synthesized live in the browser**
+- **Scan**, which reads the photo's composition as a score, is the heart of the instrument
+- **Glitch** was added as its opposite: reading the photo as raw data and breaking it
+
+---
+
+## The Color Sound series
+
+Version 10 reads a single photo as a score. Its sibling instruments play whatever your camera sees, live:
+
+- **Gazer** — every cell's color becomes a roaring, distorted wall of sound
+- **Hazer** — colors drift into slow ambient sound, with optional Satie-style piano
+- **Scanner** — a scan bar sweeps across the screen and plays the colors it passes
+
+→ https://hsentimentallegend.github.io/color-sound-scanner/
+
+---
+
+Created by [Hiroshi Mehata](https://www.mehatasentimentallegend.com/) — Experimental Music / Contemporary Art
