@@ -21,7 +21,10 @@ Part of the **Color Sound series** by [Hiroshi Mehata](https://www.mehatasentime
    - **Speed**: how long the band takes to travel edge to edge (6–60 s)
    - **Reverb**: amount of hall-like reverberation (0–100%). Higher values push the dry sound back and widen the space
 3. The photo itself is an instrument. Touch or trace it, and a processed accent of the color under your finger is layered softly behind Scan. It works with Scan stopped, and with several fingers at once
-   - Tracing fires a short grain each time you cross into another color. Faster strokes make shorter grains, and the left–right position of your finger sets the stereo position
+   - The sound reads the actual pixel under your finger, not just its color group, so every spot of the photo sounds a little different (its brightness sets the volume, its saturation how bright the tone is)
+   - Tracing draws a melody: **up and down** climbs and descends the scale (about one note per 20 px), and **sideways** walks one note at a time toward the note of the color under your finger
+   - With the Random effect, the stroke picks the processing: moving left plays in reverse, fast strokes stutter, a quick downward flick stops the tape, and anything else sustains the note
+   - Faster strokes make shorter notes, and the left–right position of your finger sets the stereo position
    - **Effect**: Reverse / Stutter loop / Octave shimmer / Tape stop / Random (changes every touch) / None
    - **Volume**: loudness of the touch sounds (0–200%), separate from the master volume
    - **Trigger**: tap for a fixed length, or hold to sound while pressed
@@ -40,22 +43,43 @@ Part of the **Color Sound series** by [Hiroshi Mehata](https://www.mehatasentime
 Sound is decided in two layers.
 
 ### Layer 1: the key of the whole photo
-The color with the strongest *area × saturation* becomes the key color. Its **emotion** sets the scale and root note for the whole photo.
+The key is read from the **impression of the whole photo**, not from a single color.
 
-| Color | Emotion | Scale |
-|---|---|---|
-| White | Clarity | Major |
-| Black | Depth | Minor |
-| Gray | Neutral | Pentatonic (major or minor by brightness) |
-| Red | Passion | Major / Blues |
-| Orange | Warmth | Major |
-| Yellow | Joy | Major pentatonic |
-| Yellow-green | Freshness | Major |
-| Green | Peace | Pentatonic |
-| Teal | Calm | Major / Minor |
-| Blue | Melancholy | Minor |
-| Purple | Mystery | Blues |
-| Magenta | Creativity | Major / Minor |
+- **Root note**: the color with the strongest *area × saturation* becomes the key color, and its emotion gives the root
+- **Mode**: measured from how the colors relate, all weighted by area
+  - *brightness* and *saturation*
+  - *warmth*: warm colors (orange) push toward +, cool colors (blue) toward −
+  - *contrast*: how far apart light and dark are
+  - *color tension*: how widely the vivid colors spread around the color wheel — clashing complementary colors score high
+
+A "mood" value (mostly brightness, plus warmth and saturation) picks one of the seven church modes from brightest to darkest. Photos with a strong character get a special scale instead:
+
+| Impression | Scale |
+|---|---|
+| Almost colorless, light | Yo scale (Japanese) |
+| Almost colorless, dark | In scale / Miyako-bushi (Japanese) |
+| Vivid colors clashing, with strong contrast | Phrygian dominant (warm) / whole-tone (cool) |
+| Calm, unified colors with little contrast | Major or minor pentatonic |
+| Otherwise, brightest → darkest mood | Lydian → major → Mixolydian → Dorian → minor → Phrygian → Locrian |
+
+The card under the photo shows the root, the mode and the measured impression.
+
+Each color still has its **emotion**, which gives it a sonic character:
+
+| Color | Emotion |
+|---|---|
+| White | Clarity |
+| Black | Depth |
+| Gray | Neutral |
+| Red | Passion |
+| Orange | Warmth |
+| Yellow | Joy |
+| Yellow-green | Freshness |
+| Green | Peace |
+| Teal | Calm |
+| Blue | Melancholy |
+| Purple | Mystery |
+| Magenta | Creativity |
 
 ### Layer 2: each color's sound
 | Color property | Sound |
@@ -74,7 +98,8 @@ The color with the strongest *area × saturation* becomes the key color. Its **e
 - **Color extraction**: the image is downscaled and clustered into up to 8 colors with k-means (k-means++ initialization, fixed seed), so the same photo always gives the same result
 - **Synthesis**: each color is built from Web Audio oscillators, filters, a WaveShaper and LFOs
 - **Scan**: a per-pixel map of which color each pixel belongs to; each voice's volume smoothly follows that color's share inside the band, with a slow drift of a different period per color. The reverb uses an impulse response generated on the fly (decaying noise that darkens over time) through a ConvolverNode
-- **Touch accents**: when a photo loads, each color's tone is pre-rendered in the background with an OfflineAudioContext. Touches play that material reversed, looped or pitch-shifted, sent into an echo to sit behind Scan
+- **Photo impression**: brightness, saturation, warmth (a cosine around the color wheel peaking at orange), contrast (spread of brightness) and color tension (one minus the length of the saturation-weighted mean hue vector) are computed from the extracted colors, weighted by area, and mapped to a mode
+- **Touch accents**: when a photo loads, each color's tone is pre-rendered in the background with an OfflineAudioContext. Touches repitch that material to the melody note and play it reversed, looped or pitch-shifted, sent into an echo to sit behind Scan
 - **Glitch**: two sources driven by chance
   - Pixel glitch: the photo's raw R, G, B values are laid out as a waveform, and short segments are looped and reversed — the texture of the photo becomes the timbre
   - Chaos network: one oscillator per color, wired in a ring so each one frequency-modulates the next (cross-FM). A short delay inside the ring feeds the sound back into itself, so the state collapses in unpredictable directions. More saturated colors disturb their neighbors more strongly

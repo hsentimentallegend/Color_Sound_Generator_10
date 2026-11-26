@@ -196,7 +196,7 @@
       <label>Release <input id="trel" type="range" min="0.05" max="4" step="0.05" value="1"> <span id="trelVal">1</span>s</label>
     </div>
 
-    <p class="meta" style="margin:14px 0 0">Touch or trace the photo to add a processed accent of the color under your finger, layered softly over Scan. It works with Scan stopped too, and with several fingers at once.</p>
+    <p class="meta" style="margin:14px 0 0">Touch or trace the photo to play the color under your finger over Scan. Tracing up and down draws a melody along the scale; tracing sideways follows the colors. It works with Scan stopped too, and with several fingers at once.</p>
     <details class="palette">
       <summary>Colors in this photo (and how each one sounds)</summary>
       <div id="colors"></div>
@@ -215,7 +215,7 @@
 
   <ul class="legend">
     <li>Scan: every color plays continuously, and colors inside the moving band are louder. The composition of the photo is the score</li>
-    <li>The strongest color (area × saturation) sets an emotion, which picks the scale and key for the whole photo</li>
+    <li>The strongest color (area × saturation) gives the root note; the impression of the whole photo (brightness, warmth, contrast, color tension) picks the mode</li>
     <li>Hue → position in that scale (over 2 octaves). Gray tones use brightness instead</li>
     <li>Brightness → volume (very dark colors drop an octave) / Saturation → timbre (soft ↔ sharp)</li>
     <li>Area → how much of each color lingers during Scan / Emotion → a sonic character for each color</li>
@@ -245,11 +245,20 @@
 const NUM_COLORS = 8;
 const NOTE_NAMES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
 const SCALES = {
-  major:            { steps: [0, 2, 4, 5, 7, 9, 11], ja: 'major' },
-  minor:            { steps: [0, 2, 3, 5, 7, 8, 10], ja: 'minor' },
-  pentatonic_major: { steps: [0, 2, 4, 7, 9],        ja: 'major pentatonic' },
-  pentatonic_minor: { steps: [0, 3, 5, 7, 10],       ja: 'minor pentatonic' },
-  blues:            { steps: [0, 3, 5, 6, 7, 10],    ja: 'blues' }
+  lydian:            { steps: [0, 2, 4, 6, 7, 9, 11], ja: 'Lydian' },
+  major:             { steps: [0, 2, 4, 5, 7, 9, 11], ja: 'major' },
+  mixolydian:        { steps: [0, 2, 4, 5, 7, 9, 10], ja: 'Mixolydian' },
+  dorian:            { steps: [0, 2, 3, 5, 7, 9, 10], ja: 'Dorian' },
+  minor:             { steps: [0, 2, 3, 5, 7, 8, 10], ja: 'minor' },
+  phrygian:          { steps: [0, 1, 3, 5, 7, 8, 10], ja: 'Phrygian' },
+  locrian:           { steps: [0, 1, 3, 5, 6, 8, 10], ja: 'Locrian' },
+  pentatonic_major:  { steps: [0, 2, 4, 7, 9],        ja: 'major pentatonic' },
+  pentatonic_minor:  { steps: [0, 3, 5, 7, 10],       ja: 'minor pentatonic' },
+  blues:             { steps: [0, 3, 5, 6, 7, 10],    ja: 'blues' },
+  yo:                { steps: [0, 2, 5, 7, 9],        ja: 'Yo scale' },
+  in:                { steps: [0, 1, 5, 7, 8],        ja: 'In scale (Miyako-bushi)' },
+  whole_tone:        { steps: [0, 2, 4, 6, 8, 10],    ja: 'whole-tone' },
+  phrygian_dominant: { steps: [0, 1, 4, 5, 7, 8, 10], ja: 'Phrygian dominant' }
 };
 const QUIRKS = {
   Clarity:    'sparkling overtones',
@@ -415,6 +424,46 @@ const freqToMidi = f => Math.round(69 + 12 * Math.log2(f / 440));
 const midiToFreq = m => 440 * Math.pow(2, (m - 69) / 12);
 const midiName = m => NOTE_NAMES[((m % 12) + 12) % 12] + (Math.floor(m / 12) - 1);
 
+/* ---------- 写真全体の印象 ----------
+   1色ではなく、色どうしの関係から写真の印象を測る（どれも面積で重み付け）
+   bright：明るさ ／ sat：鮮やかさ ／ warmth：暖色(+1)〜寒色(-1)
+   contrast：明暗差 ／ tension：鮮やかな色どうしの色相のばらつき（補色がぶつかるほど高い） */
+function impression(list) {
+  let W = 0, bright = 0, sat = 0, ws = 0, warm = 0, cx = 0, cy = 0;
+  list.forEach(c => {
+    const w = c.share, a = 2 * Math.PI * c.h;
+    W += w; bright += w * c.v; sat += w * c.s;
+    ws += w * c.s;
+    warm += w * c.s * Math.cos(2 * Math.PI * (c.h - 0.08));       // 橙あたりが最も暖かく、青が最も冷たい
+    cx += w * c.s * Math.cos(a); cy += w * c.s * Math.sin(a);
+  });
+  bright /= W; sat /= W;
+  let varV = 0;
+  list.forEach(c => { varV += c.share * (c.v - bright) ** 2; });
+  const warmth = ws > 0.02 ? warm / ws : 0;
+  const spread = ws > 0.02 ? 1 - Math.hypot(cx, cy) / ws : 0;
+  return {
+    bright, sat, warmth,
+    contrast: Math.min(1, Math.sqrt(varV / W) * 2.5),
+    tension: spread * Math.min(1, ws / W / 0.35)
+  };
+}
+
+// 印象 → 旋法。明るさの印象（mood）で 7つの教会旋法を明るい順に選び、特徴の強い写真は特別な音階にする
+function chooseMode(i) {
+  const mood = 0.55 * i.bright + 0.25 * (i.warmth + 1) / 2 + 0.2 * i.sat;
+  if (i.sat < 0.15) return mood > 0.5 ? 'yo' : 'in';                       // ほぼ無彩色：日本の音階
+  if (i.tension > 0.55 && i.contrast > 0.3) return i.warmth > 0 ? 'phrygian_dominant' : 'whole_tone';  // 補色がぶつかる
+  if (i.tension < 0.15 && i.contrast < 0.2) return mood > 0.5 ? 'pentatonic_major' : 'pentatonic_minor'; // 穏やかにまとまった色
+  if (mood > 0.74) return 'lydian';
+  if (mood > 0.62) return 'major';
+  if (mood > 0.52) return 'mixolydian';
+  if (mood > 0.43) return 'dorian';
+  if (mood > 0.34) return 'minor';
+  if (mood > 0.24 || i.contrast < 0.4) return 'phrygian';
+  return 'locrian';
+}
+
 /* ---------- 解析：層1（調）と層2（色ごとの音） ---------- */
 function analyze(source) {
   scanGrid = extractColors(source, NUM_COLORS);
@@ -423,16 +472,29 @@ function analyze(source) {
     return { ...c, ...hsv, ...classify(hsv.h, hsv.s, hsv.v), strength: c.share * (hsv.s + 0.3) };
   });
 
-  // 層1：いちばん強い色で調を決める（主音は C3〜B3 に収める）
+  // 層1：主音はいちばん強い色から、旋法は写真全体の印象から決める（主音は C3〜B3 に収める）
   const dom = colors.reduce((a, b) => (b.strength > a.strength ? b : a));
   const rootMidi = 48 + (((freqToMidi(dom.baseFreq) - 48) % 12) + 12) % 12;
-  keyInfo = { dom, rootMidi, scale: dom.scale };
+  const imp = impression(colors);
+  keyInfo = { dom, rootMidi, scale: chooseMode(imp), imp };
   colors.forEach(c => {
     c.isDominant = c === dom;
     c.volume = 0.15 + 0.85 * c.v;                        // 明るさ → 音量
   });
   assignNotes();
   renderTones();
+}
+
+// 音階の何番目か（deg）→ MIDI。deg は負や音階の長さ以上でもよく、オクターブをまたぐ
+function degToMidi(deg) {
+  const steps = SCALES[keyInfo.scale].steps, n = steps.length;
+  return keyInfo.rootMidi + 12 * Math.floor(deg / n) + steps[((deg % n) + n) % n];
+}
+// 色（h, s, v）→ 音階の何番目か。色相（無彩色は明るさ）で 2オクターブに並べ、とても暗い色は1オクターブ下
+function colorDeg(h, s, v) {
+  const n = SCALES[keyInfo.scale].steps.length, range = n * 2;
+  const pos = s < 0.2 ? v : h;
+  return Math.min(range - 1, Math.floor(pos * range)) - (v < 0.25 ? n : 0);
 }
 
 // 層2：色ごとに音の高さを決める。同じ音が重なった時の扱いは「音の被り」の設定で変わる
@@ -483,8 +545,10 @@ const hexOf = rgb => '#' + rgb.map(x => x.toString(16).padStart(2, '0')).join(''
 function render() {
   const { dom, rootMidi, scale } = keyInfo;
   $('keyDot').style.background = hexOf(dom.rgb);
-  $('keyTitle').textContent = `This photo is ${dom.emotion} (${NOTE_NAMES[rootMidi % 12]} ${SCALES[scale].ja})`;
-  $('keySub').textContent = `Key color ${hexOf(dom.rgb)} · area ${Math.round(dom.share * 100)}% · saturation ${Math.round(dom.s * 100)}%`;
+  const imp = keyInfo.imp, pc = x => Math.round(x * 100) + '%';
+  $('keyTitle').textContent = `This photo is ${dom.emotion} — ${NOTE_NAMES[rootMidi % 12]} ${SCALES[scale].ja}`;
+  $('keySub').textContent = `Root from key color ${hexOf(dom.rgb)} · mode from brightness ${pc(imp.bright)}, ` +
+    `warmth ${imp.warmth >= 0 ? '+' : ''}${Math.round(imp.warmth * 100)}, contrast ${pc(imp.contrast)}, color tension ${pc(imp.tension)}`;
 
   const box = $('colors');
   box.innerHTML = '';
@@ -824,8 +888,9 @@ function accentFx() {
 function startAccent(c, o) {
   const a = audio();
   const t0 = a.currentTime + 0.005;
-  const type = o.fx === 'auto' ? pick(ACCENTS) : o.fx;
+  const type = o.type || (o.fx === 'auto' ? pick(ACCENTS) : o.fx);
   const { fwd, rev } = c.tone;
+  const r = o.rate || 1;                                // 素材の高さからの比（なぞる時の旋律に使う）
   const len = fwd.duration;
   const body = [0.25, len - 0.6];                       // 立ち上がりと消え際を除いた、伸びている部分
   const src = a.createBufferSource();
@@ -834,33 +899,39 @@ function startAccent(c, o) {
 
   switch (type) {
     case 'reverse':                                     // 逆再生：膨らんで、ぷつっと切れる
-      offset = o.hold ? 0 : Math.max(0, len - o.dur);
+      offset = o.hold ? 0 : Math.max(0, len - o.dur * r);
       src.loop = o.hold;
+      src.playbackRate.value = r;
       send = 0.6;
       break;
     case 'stutter': {                                   // ごく短い区間をループして、どもらせる
       const seg = rnd(0.045, 0.16);
       const st = rnd(body[0], body[1] - seg);
       src.loop = true; src.loopStart = st; src.loopEnd = st + seg; offset = st;
-      src.playbackRate.value = pick([0.5, 1, 1, 2]);
+      src.playbackRate.value = r * (o.rate ? 1 : pick([0.5, 1, 1, 2]));
       send = 0.4; gainK = 0.9;
       break;
     }
     case 'shimmer':                                     // 1〜2オクターブ上で、こだまを多めに
       src.loop = true; src.loopStart = body[0]; src.loopEnd = body[1]; offset = body[0];
-      src.playbackRate.value = pick([2, 2, 4]);
+      src.playbackRate.value = r * (o.rate ? 2 : pick([2, 2, 4]));
       send = 0.9; gainK = 0.6;
+      break;
+    case 'sustain':                                     // 加工せず、その高さで伸ばす（なぞる旋律の基本の音）
+      src.loop = true; src.loopStart = body[0]; src.loopEnd = body[1]; offset = body[0];
+      src.playbackRate.value = r;
+      send = 0.5;
       break;
     case 'tape':                                        // テープが止まるように、音の高さが沈んでいく
       src.loop = true; src.loopStart = body[0]; src.loopEnd = body[1]; offset = body[0];
-      src.playbackRate.setValueAtTime(1, t0);
-      src.playbackRate.exponentialRampToValueAtTime(0.2, t0 + Math.max(0.3, o.hold ? 3 : o.dur));
+      src.playbackRate.setValueAtTime(r, t0);
+      src.playbackRate.exponentialRampToValueAtTime(r * 0.2, t0 + Math.max(0.3, o.hold ? 3 : o.dur));
       break;
   }
 
   const hp = a.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 180;   // 低音を削って Scan とぶつからないように
   const env = a.createGain();
-  const peak = 0.12 * c.volume * o.mix * gainK;          // 音量 100% で、以前の初期値の約2倍
+  const peak = 0.12 * (o.vol ?? c.volume) * o.mix * gainK;   // 音量 100% で、以前の初期値の約2倍
   const attack = 0.008;
   const floor = type === 'reverse' ? peak : Math.max(peak * (1 - o.decay) ** 2, peak * 0.002);
   const fall = 0.04 + (1 - o.decay) * 1.5;
@@ -868,6 +939,7 @@ function startAccent(c, o) {
   env.gain.linearRampToValueAtTime(peak, t0 + attack);
   env.gain.setTargetAtTime(floor, t0 + attack, fall);
   let node = src.connect(hp);
+  if (o.cutoff) { const lp = a.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = o.cutoff; node = node.connect(lp); }
   if (a.createStereoPanner) { const pan = a.createStereoPanner(); pan.pan.value = o.pan ?? rnd(-0.6, 0.6); node = node.connect(pan); }
   node.connect(env).connect(master);
   const sg = a.createGain(); sg.gain.value = send;
@@ -885,6 +957,7 @@ function startAccent(c, o) {
 
 function startTap(c, o) {
   if (o.fx !== 'none' && c.tone) return startAccent(c, o);
+  if (o.rate) c = { ...c, freq: c.freq * o.rate, volume: o.vol ?? c.volume };   // なぞる旋律の高さ・指の下の色の音量
   const a = audio();
   const t0 = a.currentTime + 0.005;
   const v = buildVoice(c, t0);
@@ -957,8 +1030,39 @@ function colorAt(e) {
   const fx = (e.clientX - r.left) / r.width, fy = (e.clientY - r.top) / r.height;
   if (fx < 0 || fx > 1 || fy < 0 || fy > 1) return null;
   const { grid, W, h } = scanGrid;
-  const idx = grid[Math.min(h - 1, Math.floor(fy * h)) * W + Math.min(W - 1, Math.floor(fx * W))];
-  return idx < 0 ? null : { idx, pan: (fx * 2 - 1) * 0.8 };
+  const p = Math.min(h - 1, Math.floor(fy * h)) * W + Math.min(W - 1, Math.floor(fx * W));
+  const idx = grid[p];
+  if (idx < 0) return null;
+  const px = scanGrid.rgba;
+  const hsv = rgbToHsv(px[p * 4], px[p * 4 + 1], px[p * 4 + 2]);  // グループの色ではなく、指の真下の実際の色
+  return { idx, pan: (fx * 2 - 1) * 0.8, ...hsv, deg: colorDeg(hsv.h, hsv.s, hsv.v) };
+}
+
+/* なぞる旋律
+   ・触れた瞬間：指の真下の色の音
+   ・上下になぞる：音階を上がる／下がる（約20pxで1音）
+   ・左右になぞる：指の下の色の音へ、1音ずつ近づいていく
+   ・音色は近いグループの色の素材を使い、指の下の色の明るさで音量、鮮やかさで音の明るさが変わる */
+function pixelOpts(hit, deg, base) {
+  const c = colors[hit.idx];
+  const n = SCALES[keyInfo.scale].steps.length;
+  deg = Math.max(-n, Math.min(3 * n - 1, deg));
+  return {
+    deg,
+    rate: midiToFreq(degToMidi(deg)) / c.freq,
+    vol: 0.15 + 0.85 * hit.v,
+    cutoff: 900 + hit.s * 9000,
+    pan: hit.pan,
+    ...base
+  };
+}
+
+// おまかせの時、なぞり方で加工を選ぶ：左へ＝逆再生、速い＝どもり、下へ急に＝テープが止まる、それ以外＝そのまま伸ばす
+function gestureType(dx, dy, speed) {
+  if (dy > 30 && speed > 0.8) return 'tape';
+  if (speed > 1.3) return 'stutter';
+  if (dx < -8 && Math.abs(dx) > Math.abs(dy)) return 'reverse';
+  return Math.random() < 0.2 ? 'shimmer' : 'sustain';
 }
 
 function ripple(e, c, big) {
@@ -987,12 +1091,12 @@ $('stage').addEventListener('pointerdown', e => {
   if (!hit) return;
   e.preventDefault();
   try { $('stage').setPointerCapture(e.pointerId); } catch (err) {}
-  const o = { ...tapOpts(), pan: hit.pan };
   const c = colors[hit.idx];
+  const o = pixelOpts(hit, hit.deg, tapOpts());
   const voice = startTap(c, o);
   ripple(e, c, true);
   flashChip(hit.idx, 400);
-  touches.set(e.pointerId, { voice: o.hold ? voice : null, idx: hit.idx, x: e.clientX, y: e.clientY, last: performance.now() });
+  touches.set(e.pointerId, { voice: o.hold ? voice : null, idx: hit.idx, deg: o.deg, x: e.clientX, y: e.clientY, last: performance.now() });
 });
 $('stage').addEventListener('pointermove', e => {
   const t = touches.get(e.pointerId);
@@ -1000,16 +1104,23 @@ $('stage').addEventListener('pointermove', e => {
   const hit = colorAt(e);
   if (!hit) return;
   const now = performance.now();
-  const dist = Math.hypot(e.clientX - t.x, e.clientY - t.y);
-  const changed = hit.idx !== t.idx;
-  if (now - t.last < (changed ? 50 : 90) || (!changed && dist < 28)) return;
+  const dx = e.clientX - t.x, dy = e.clientY - t.y;
+  const dist = Math.hypot(dx, dy);
+  if (now - t.last < 60 || dist < 20) return;
   const speed = dist / Math.max(1, now - t.last);                 // px/ms
+  // 上下の動き → 音階を上り下り。ほぼ横の動き → 指の下の色の音へ1音近づく
+  const vSteps = Math.max(-3, Math.min(3, Math.round(-dy / 20)));
+  let deg = t.deg;
+  if (vSteps && Math.abs(dy) >= Math.abs(dx) * 0.6) deg += vSteps;
+  else if (hit.deg !== deg) deg += Math.sign(hit.deg - deg);
   const base = tapOpts();
-  const dur = Math.max(0.08, Math.min(1.2, 0.5 / (0.5 + speed * 2)));
-  startTap(colors[hit.idx], { ...base, hold: false, dur, release: Math.min(base.release, 0.6), mix: base.mix * 0.6, pan: hit.pan });
+  const dur = Math.max(0.1, Math.min(1.2, 0.6 / (0.5 + speed * 2)));
+  const o = pixelOpts(hit, deg, { ...base, hold: false, dur, release: Math.min(base.release, 0.8), mix: base.mix * 0.7 });
+  if (base.fx === 'auto') o.type = gestureType(dx, dy, speed);
+  startTap(colors[hit.idx], o);
   ripple(e, colors[hit.idx], false);
   flashChip(hit.idx, 250);
-  Object.assign(t, { idx: hit.idx, x: e.clientX, y: e.clientY, last: now });
+  Object.assign(t, { idx: hit.idx, deg: o.deg, x: e.clientX, y: e.clientY, last: now });
 });
 const touchUp = e => {
   const t = touches.get(e.pointerId);
