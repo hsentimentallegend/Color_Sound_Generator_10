@@ -20,8 +20,6 @@ Part of the **Color Sound series** by [Hiroshi Mehata](https://www.mehatasentime
    - **Direction**: horizontal (band moves left–right) or vertical (band moves up–down). Horizontally striped photos change most with a vertical scan, and vice versa
    - **Speed**: how long the band takes to travel edge to edge (6–60 s)
    - **Reverb**: amount of hall-like reverberation (0–100%). Higher values push the dry sound back and widen the space
-   - **Tremolo**: how deeply every color pulses (0–100%). Each color pulses at its own rate, so the voices drift in and out of phase
-   - **Vinyl**: old-record character (0–100%) — the pitch wobbles like a turntable, with crackle and hiss on top. It colors everything, Glitch included
 3. The photo itself is an instrument. Touch or trace it, and a processed accent of the color under your finger is layered softly behind Scan. It works with Scan stopped, and with several fingers at once
    - Tracing fires a short grain each time you cross into another color. Faster strokes make shorter grains, and the left–right position of your finger sets the stereo position
    - **Effect**: Reverse / Stutter loop / Octave shimmer / Tape stop / Random (changes every touch) / None
@@ -76,8 +74,6 @@ The color with the strongest *area × saturation* becomes the key color. Its **e
 - **Color extraction**: the image is downscaled and clustered into up to 8 colors with k-means (k-means++ initialization, fixed seed), so the same photo always gives the same result
 - **Synthesis**: each color is built from Web Audio oscillators, filters, a WaveShaper and LFOs
 - **Scan**: a per-pixel map of which color each pixel belongs to; each voice's volume smoothly follows that color's share inside the band, with a slow drift of a different period per color. The reverb uses an impulse response generated on the fly (decaying noise that darkens over time) through a ConvolverNode
-- **Tremolo**: every voice has its own tremolo. Saturation shapes the pulse (smooth for muted colors, choppy for vivid ones), hue picks the rate from a set of ratios (1 : 9/8 : 5/4 : 4/3 …) so the voices phase against each other, and the rate itself slowly drifts. Peace and Calm, whose character is tremolo, pulse more deeply
-- **Vinyl**: applied at the master output so everything wobbles together like a real turntable. Pitch wobble comes from modulating a short delay: wow at one 33⅓ rpm revolution (about 1.8 s), flutter, and slow random drift. A generated 11-second loop adds crackle, hiss and rumble, and the band is narrowed like an old pressing
 - **Touch accents**: when a photo loads, each color's tone is pre-rendered in the background with an OfflineAudioContext. Touches play that material reversed, looped or pitch-shifted, sent into an echo to sit behind Scan
 - **Glitch**: two sources driven by chance
   - Pixel glitch: the photo's raw R, G, B values are laid out as a waveform, and short segments are looped and reversed — the texture of the photo becomes the timbre

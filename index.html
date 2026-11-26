@@ -147,8 +147,6 @@
         </label>
         <label>Speed (edge to edge) <input id="sweep" type="range" min="6" max="60" step="1" value="20"> <span id="sweepVal">20</span>s</label>
         <label>Reverb <input id="reverb" type="range" min="0" max="100" step="1" value="45"> <span id="reverbVal">45</span>%</label>
-        <label>Tremolo <input id="trem" type="range" min="0" max="100" step="1" value="35"> <span id="tremVal">35</span>%</label>
-        <label>Vinyl <input id="vinyl" type="range" min="0" max="100" step="1" value="30"> <span id="vinylVal">30</span>%</label>
       </div>
     </div>
 
@@ -523,7 +521,6 @@ function audio() {
     master.gain.value = +$('vol').value;
     comp = ctx.createDynamicsCompressor();
     comp.connect(ctx.destination);
-    buildVinyl();
     route();
     loadCrusher();
 
@@ -611,86 +608,15 @@ function sendCrush() {
 
 function route() {
   if (!ctx) return;
-  vinyl.out.disconnect();
+  master.disconnect();
   if (crusherNode) crusherNode.disconnect();
   if (crush.on) {
     if (!crusherNode) scriptCrusher();
-    vinyl.out.connect(crusherNode).connect(comp);
+    master.connect(crusherNode).connect(comp);
   } else {
-    vinyl.out.connect(comp);
+    master.connect(comp);
   }
 }
-
-/* ---------- Vinyl（古いレコードの揺れとノイズ） ----------
-   全部の音が通る出口に掛けるので、本物のターンテーブルのように全体が一緒に揺れる。
-   ・ワウ：33⅓回転の1周（約1.8秒）ごとの、盤の偏心による音程のうねり
-   ・フラッター：細かい回転ムラ ／ ドリフト：不規則でゆっくりした音程の漂い
-   （音程の揺れは、ごく短いディレイの長さを揺らして作る）
-   ・盤面のノイズ：プチッというクラックル、サーッというヒス、低いゴロゴロ
-   ・音質：高音と低音を少し削って、古い盤の帯域にする */
-let vinyl = null;
-const vinylAmt = () => +$('vinyl').value / 100;
-
-function buildVinyl() {
-  const a = ctx, sr = a.sampleRate;
-  const delay = a.createDelay(0.1); delay.delayTime.value = 0.015;
-  const hp = a.createBiquadFilter(); hp.type = 'highpass';
-  const lp = a.createBiquadFilter(); lp.type = 'lowpass';
-  const out = a.createGain();
-  master.connect(delay).connect(hp).connect(lp).connect(out);
-
-  const mod = (freq, type = 'sine') => { const o = a.createOscillator(); o.type = type; o.frequency.value = freq; o.start(); return o; };
-  const wow = a.createGain(), flutter = a.createGain(), drift = a.createGain();
-  mod(0.555).connect(wow).connect(delay.delayTime);
-  const f1 = mod(7.3); f1.connect(flutter); mod(11.1, 'triangle').connect(flutter);
-  flutter.connect(delay.delayTime);
-  const dn = a.createBufferSource(); dn.buffer = getNoise(sr); dn.loop = true;
-  const dlp = a.createBiquadFilter(); dlp.type = 'lowpass'; dlp.frequency.value = 0.4;
-  const dlp2 = a.createBiquadFilter(); dlp2.type = 'lowpass'; dlp2.frequency.value = 0.4;
-  dn.connect(dlp).connect(dlp2).connect(drift).connect(delay.delayTime);
-  dn.start();
-
-  // 盤面のノイズ（11秒ぶんを作ってループ。長めにして繰り返しに気づきにくくする）
-  const len = Math.round(sr * 11);
-  const nb = a.createBuffer(2, len, sr);
-  for (let ch = 0; ch < 2; ch++) {
-    const d = nb.getChannelData(ch);
-    let rum = 0;
-    for (let i = 0; i < len; i++) {
-      rum += 0.002 * ((Math.random() * 2 - 1) - rum);
-      d[i] = (Math.random() * 2 - 1) * 0.012 + rum * 0.9;          // ヒス + ゴロゴロ
-    }
-    const clicks = Math.round(11 * 9);                              // 1秒に約9個のプチッ
-    for (let n = 0; n < clicks; n++) {
-      const at = Math.floor(Math.random() * (len - 200));
-      const big = Math.random() < 0.08;
-      const amp = (big ? 0.5 : 0.08 + Math.random() * 0.2) * (Math.random() < 0.5 ? -1 : 1);
-      const w = big ? 40 + Math.random() * 80 : 2 + Math.random() * 6;
-      for (let j = 0; j < w * 3; j++) d[at + j] += amp * Math.exp(-j / w) * (j % 2 ? -0.6 : 1);
-    }
-  }
-  const ns = a.createBufferSource(); ns.buffer = nb; ns.loop = true;
-  const nhp = a.createBiquadFilter(); nhp.type = 'highpass'; nhp.frequency.value = 30;
-  const noise = a.createGain(); noise.gain.value = 0;
-  ns.connect(nhp).connect(noise).connect(out);
-  ns.start();
-
-  vinyl = { hp, lp, out, wow, flutter, drift, noise };
-  setVinyl(0);
-}
-
-function setVinyl(at) {
-  if (!vinyl) return;
-  const v = vinylAmt(), T = 0.15;
-  const set = (param, val) => (at ? param.setTargetAtTime(val, at, T) : (param.value = val));
-  set(vinyl.wow.gain, v * 0.0011);          // 約 0.4% のうねり
-  set(vinyl.flutter.gain, v * 0.00002);
-  set(vinyl.drift.gain, v * 0.5);
-  set(vinyl.noise.gain, v * v * 0.9);       // ノイズは上げるほど急に増える
-  set(vinyl.hp.frequency, 10 + v * 70);
-  set(vinyl.lp.frequency, 20000 - v * 13000);
-}
-$('vinyl').oninput = e => { $('vinylVal').textContent = e.target.value; if (ctx) setVinyl(ctx.currentTime); };
 
 function showCrusherKind() {
   $('crushKind').textContent = crusherKind === 'worklet' ? '' : crusherKind === 'script' ? ' (compatibility mode)' : '';
@@ -719,10 +645,6 @@ function getNoise(sr) {
   }
   return noiseBufs[sr];
 }
-
-const TREM_BASE = 1.4;                                           // トレモロの基準の速さ（Hz）
-const TREM_RATIOS = [1, 9 / 8, 5 / 4, 4 / 3, 3 / 2, 5 / 3, 15 / 8, 2];
-const tremAmt = () => +$('trem').value / 100;
 
 // 1色ぶんの音の部品（波形・フィルター・感情のくせ）を組み立てる。音量の形は呼び出し側で付ける
 // a を渡すと、その音の文脈（加工音の書き出し用の OfflineAudioContext など）で組み立てる
@@ -761,9 +683,12 @@ function buildVoice(c, t0, a = ctx) {
     lfo.connect(depth);
     oscs.forEach(o => depth.connect(o.detune));
   };
-  // トレモロ（全色）。設定の深さ × 色ごとの強さで揺らす。強さ・速さは感情で上書きできる
-  let tremK = 0.6, tremRate = 0;
-  const tremolo = (rate, k) => { tremRate = rate; tremK = k; };
+  const tremolo = (rate, amount) => {
+    trem.gain.value = 1 - amount / 2;
+    const lfo = osc('sine', rate);
+    const depth = a.createGain(); depth.gain.value = amount / 2;
+    lfo.connect(depth).connect(trem.gain);
+  };
   const addPartial = (mult, gain) => {
     const o = osc('sine', c.freq * mult);
     const g = a.createGain(); g.gain.value = gain;
@@ -803,8 +728,8 @@ function buildVoice(c, t0, a = ctx) {
       break;
     case 'Joy':        vibrato(6.5, 12); break;
     case 'Freshness':  attack = 0.004; sustain = 0.25; addPartial(2, 0.15); break;
-    case 'Peace':      tremolo(1.8, 1.4); attack = 0.06; break;   // トレモロが「くせ」の色は深く揺らす
-    case 'Calm':       tremolo(0.5, 1.6); attack = 0.25; sustain = 0.8; break;
+    case 'Peace':      tremolo(1.8, 0.3); attack = 0.06; break;
+    case 'Calm':       tremolo(0.5, 0.45); attack = 0.25; sustain = 0.8; break;
     case 'Melancholy': vibrato(4.5, 14); attack = 0.1; break;
     case 'Mystery': {
       vibrato(0.7, 35);
@@ -825,31 +750,8 @@ function buildVoice(c, t0, a = ctx) {
 
   sum.connect(filter);
   chain.connect(trem);
-
-  /* トレモロの組み立て
-     ・形：彩度が低いとなめらかな波、高いほど角の立った刻む揺れ（LFO を WaveShaper でつぶす）
-     ・速さ：色相で決まる比率（1 : 9/8 : 5/4 …）なので、色どうしの揺れがずれては揃う
-     ・揺らぎ：揺れの速さそのものを、ごくゆっくり伸び縮みさせる */
-  const rate = tremRate || TREM_BASE * TREM_RATIOS[Math.min(7, Math.floor(c.h * 8))];
-  const lfo = osc('sine', rate);
-  const shape = a.createWaveShaper();
-  const k = 1 + c.s * c.s * 14, curve = new Float32Array(512);
-  for (let i = 0; i < 512; i++) { const x = i / 255.5 - 1; curve[i] = Math.tanh(k * x) / Math.tanh(k); }
-  shape.curve = curve;
-  const depth = a.createGain();
-  lfo.connect(shape).connect(depth).connect(trem.gain);
-  const drift = osc('sine', 0.04 + Math.random() * 0.08);
-  const driftAmt = a.createGain(); driftAmt.gain.value = rate * 0.25;
-  drift.connect(driftAmt).connect(lfo.frequency);
-  const setTrem = (amount, at = 0) => {
-    const d = Math.min(0.95, amount * tremK);
-    if (at) { trem.gain.setTargetAtTime(1 - d / 2, at, 0.1); depth.gain.setTargetAtTime(d / 2, at, 0.1); }
-    else { trem.gain.value = 1 - d / 2; depth.gain.value = d / 2; }
-  };
-  setTrem(tremAmt());
-
   sources.forEach(s => s.start(t0));
-  return { out: trem, sources, attack, sustain, setTrem };
+  return { out: trem, sources, attack, sustain };
 }
 
 /* ---------- パレットの演奏 ----------
@@ -1193,7 +1095,7 @@ function startScan() {
     v.out.connect(g);
     g.connect(dry);
     g.connect(send);
-    return { env: g, sources: v.sources, setTrem: v.setTrem, period: 7 + Math.random() * 10, phase: Math.random() * Math.PI * 2 };
+    return { env: g, sources: v.sources, period: 7 + Math.random() * 10, phase: Math.random() * Math.PI * 2 };
   });
   scan = { voices, dry, send, phase: 0, last: 0, lastAudio: 0, raf: 0 };
   setReverb(0);
@@ -1264,11 +1166,6 @@ $('collide').onchange = () => {
 
 $('sweep').oninput = e => { $('sweepVal').textContent = e.target.value; };
 $('reverb').oninput = e => { $('reverbVal').textContent = e.target.value; if (ctx) setReverb(ctx.currentTime); };
-$('trem').oninput = e => {
-  $('tremVal').textContent = e.target.value;
-  if (scan) scan.voices.forEach(v => v.setTrem(tremAmt(), ctx.currentTime));
-};
-$('trem').onchange = () => { if (colors.length) renderTones(); };   // 触れた時の音の素材も作り直す
 
 /* ---------- Glitch（写真をデータとして壊しながら読む） ----------
    2つの音源を「暴走度」で暴れさせる。
